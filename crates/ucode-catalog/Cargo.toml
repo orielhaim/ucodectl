@@ -1,0 +1,21 @@
+# crates/ucode-catalog/Cargo.toml
+[package]
+name = "ucode-catalog"
+description = "Ingestion, normalisation, deduplication and diffing of microcode releases"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ucode-core = { workspace = true, features = ["std"] }
+ucode-intel.workspace = true
+ucode-amd.workspace = true
+thiserror = { workspace = true, features = ["std"] }
+serde = { workspace = true, features = ["std"] }
+sha2.workspace = true
+tracing.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+rustix.workspace = true

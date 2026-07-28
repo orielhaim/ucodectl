@@ -1,0 +1,13 @@
+# crates/ucode-archive/Cargo.toml
+[package]
+name = "ucode-archive"
+description = "Deterministic newc CPIO reader/writer for early microcode loading"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ucode-core.workspace = true
+thiserror = { workspace = true, features = ["std"] }

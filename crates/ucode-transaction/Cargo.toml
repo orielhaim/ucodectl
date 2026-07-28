@@ -1,0 +1,21 @@
+# crates/ucode-transaction/Cargo.toml
+[package]
+name = "ucode-transaction"
+description = "Atomic apply/rollback of microcode-related filesystem changes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ucode-core = { workspace = true, features = ["std"] }
+ucode-catalog.workspace = true
+ucode-boot.workspace = true
+ucode-policy.workspace = true
+thiserror = { workspace = true, features = ["std"] }
+serde = { workspace = true, features = ["std"] }
+serde_json.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+tracing.workspace = true

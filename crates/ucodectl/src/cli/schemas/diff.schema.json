@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ucodectl.dev/schema/v1/diff.json",
+  "title": "ucodectl CatalogDiff",
+  "type": "object",
+  "required": [
+    "entries",
+    "added",
+    "removed",
+    "upgraded",
+    "downgraded",
+    "changed",
+    "unchanged"
+  ],
+  "properties": {
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "vendor", "signature", "platform_mask"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "added",
+              "removed",
+              "upgraded",
+              "downgraded",
+              "changed",
+              "unchanged"
+            ]
+          },
+          "vendor": { "type": "string" },
+          "signature": { "type": "string" },
+          "platform_mask": { "type": "string" },
+          "old_revision": { "type": ["string", "null"] },
+          "new_revision": { "type": ["string", "null"] },
+          "old_date": { "type": ["string", "null"] },
+          "new_date": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "added": { "type": "integer" },
+    "removed": { "type": "integer" },
+    "upgraded": { "type": "integer" },
+    "downgraded": { "type": "integer" },
+    "changed": { "type": "integer" },
+    "unchanged": { "type": "integer" }
+  }
+}

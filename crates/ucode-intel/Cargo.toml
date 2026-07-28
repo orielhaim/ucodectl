@@ -1,0 +1,20 @@
+# crates/ucode-intel/Cargo.toml
+[package]
+name = "ucode-intel"
+description = "Intel microcode bundle parsing, validation and serialisation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ucode-core.workspace = true
+thiserror = { workspace = true, features = ["std"] }
+zerocopy.workspace = true
+sha2.workspace = true
+
+[features]
+default = ["dat"]
+# Legacy Intel `.dat` text format. Off by default for embedders.
+dat = []

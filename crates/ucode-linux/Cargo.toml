@@ -1,0 +1,16 @@
+# crates/ucode-linux/Cargo.toml
+[package]
+name = "ucode-linux"
+description = "Read-only Linux system discovery for CPU microcode state"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ucode-core = { workspace = true, features = ["std"] }
+thiserror = { workspace = true, features = ["std"] }
+serde = { workspace = true, features = ["std"] }
+raw-cpuid.workspace = true
+tracing.workspace = true

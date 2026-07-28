@@ -1,0 +1,20 @@
+# crates/ucode-boot/Cargo.toml
+[package]
+name = "ucode-boot"
+description = "Initrd early-CPIO and UKI .ucode inspection for microcode"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ucode-core = { workspace = true, features = ["std"] }
+ucode-amd.workspace = true
+ucode-archive.workspace = true
+ucode-catalog.workspace = true
+thiserror = { workspace = true, features = ["std"] }
+serde = { workspace = true, features = ["std"] }
+sha2.workspace = true
+object.workspace = true
+tracing.workspace = true

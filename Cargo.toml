@@ -1,0 +1,60 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/ucode-core",
+    "crates/ucode-intel",
+    "crates/ucode-amd",
+    "crates/ucode-archive",
+    "crates/ucode-catalog",
+    "crates/ucode-linux",
+    "crates/ucode-boot",
+    "crates/ucode-policy",
+    "crates/ucode-transaction",
+    "crates/ucodectl",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "Apache-2.0"
+repository = "https://github.com/orielhaim/ucodectl"
+authors = ["orielhaim"]
+
+[workspace.dependencies]
+ucode-core = { path = "crates/ucode-core", version = "0.1.0" }
+ucode-intel = { path = "crates/ucode-intel", version = "0.1.0" }
+ucode-amd = { path = "crates/ucode-amd", version = "0.1.0" }
+ucode-archive = { path = "crates/ucode-archive", version = "0.1.0" }
+ucode-catalog = { path = "crates/ucode-catalog", version = "0.1.0" }
+ucode-linux = { path = "crates/ucode-linux", version = "0.1.0" }
+ucode-boot = { path = "crates/ucode-boot", version = "0.1.0" }
+ucode-policy = { path = "crates/ucode-policy", version = "0.1.0" }
+ucode-transaction = { path = "crates/ucode-transaction", version = "0.1.0" }
+
+thiserror = { version = "2.0", default-features = false }
+serde = { version = "1.0", default-features = false, features = [
+    "derive",
+    "alloc",
+] }
+serde_json = "1.0"
+zerocopy = { version = "0.8", features = ["derive"] }
+clap = { version = "4.6", features = ["derive", "wrap_help"] }
+clap_complete = "4.6"
+clap_mangen = "0.2"
+schemars = "1.2"
+rustix = { version = "1.1", features = ["fs", "process"] }
+tempfile = "3"
+sha2 = "0.11"
+bitflags = "2"
+raw-cpuid = "11.6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+object = { version = "0.37", default-features = false, features = ["read", "pe"] }
+miette = { version = "7", features = ["fancy"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+panic = "abort"

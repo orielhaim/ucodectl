@@ -1,0 +1,17 @@
+# crates/ucode-core/Cargo.toml
+[package]
+name = "ucode-core"
+description = "Vendor-neutral CPU microcode domain model"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+
+[features]
+default = ["std"]
+std = ["serde/std", "thiserror/std"]

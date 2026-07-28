@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ucodectl.dev/schema/v1/plan.json",
+  "title": "ucodectl Plan",
+  "type": "object",
+  "required": [
+    "plan_version",
+    "overall_status",
+    "action",
+    "cpus",
+    "writes",
+    "messages",
+    "would_change"
+  ],
+  "properties": {
+    "plan_version": { "type": "integer", "const": 1 },
+    "overall_status": { "type": "string" },
+    "action": { "type": "string" },
+    "cpus": { "type": "array", "items": { "type": "object" } },
+    "writes": { "type": "array", "items": { "type": "object" } },
+    "messages": { "type": "array", "items": { "type": "string" } },
+    "would_change": { "type": "boolean" }
+  }
+}

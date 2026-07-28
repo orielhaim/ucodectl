@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ucodectl.dev/schema/v1/manifest.json",
+  "title": "ucodectl Manifest",
+  "type": "object",
+  "required": ["manifest_version", "generator", "entries", "totals"],
+  "properties": {
+    "manifest_version": { "type": "integer", "const": 1 },
+    "generator": { "type": "string" },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/entry" }
+    },
+    "totals": {
+      "type": "object",
+      "required": ["patch_count", "byte_count", "vendors"],
+      "properties": {
+        "patch_count": { "type": "integer", "minimum": 0 },
+        "byte_count": { "type": "integer", "minimum": 0 },
+        "vendors": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["intel", "amd"] }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": [
+        "vendor",
+        "signature",
+        "platform_mask",
+        "revision",
+        "size",
+        "source",
+        "offset"
+      ],
+      "properties": {
+        "vendor": { "type": "string", "enum": ["intel", "amd"] },
+        "signature": { "type": "string" },
+        "platform_mask": { "type": "string" },
+        "revision": { "type": "string" },
+        "date": { "type": ["string", "null"] },
+        "size": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": ["string", "null"] },
+        "source": { "type": "string" },
+        "offset": { "type": "integer", "minimum": 0 },
+        "additional_signatures": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "min_base_revision": { "type": ["string", "null"] },
+        "min_runtime_revision": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

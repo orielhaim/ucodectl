@@ -1,0 +1,35 @@
+# crates/ucodectl/Cargo.toml
+[package]
+name = "ucodectl"
+description = "Inspect, validate, build and verify CPU microcode for Linux"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "ucodectl"
+path = "src/main.rs"
+
+[dependencies]
+ucode-core = { workspace = true, features = ["std"] }
+ucode-intel.workspace = true
+ucode-amd.workspace = true
+ucode-archive.workspace = true
+ucode-catalog.workspace = true
+ucode-linux.workspace = true
+ucode-boot.workspace = true
+ucode-policy.workspace = true
+ucode-transaction.workspace = true
+clap.workspace = true
+clap_complete.workspace = true
+clap_mangen.workspace = true
+serde = { workspace = true, features = ["std"] }
+serde_json.workspace = true
+thiserror = { workspace = true, features = ["std"] }
+miette.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+sha2.workspace = true
