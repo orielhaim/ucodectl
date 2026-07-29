@@ -1,3 +1,5 @@
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
@@ -191,6 +193,84 @@ impl PlatformMask {
 impl fmt::Display for PlatformMask {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "0x{:02x}", self.0)
+    }
+}
+
+/// Where an active microcode revision observation came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RevisionSource {
+    ProcCpuinfo,
+    LinuxSysfs,
+    WindowsRegistry,
+    Manual,
+    Unavailable,
+}
+
+/// A normalized active-microcode observation.  Unlike an `Option<u32>`, this
+/// preserves why a revision cannot be used for update policy.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum RevisionObservation {
+    Known {
+        revision: u32,
+        source: RevisionSource,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        raw_value: Option<Vec<u8>>,
+    },
+    Unavailable {
+        source: RevisionSource,
+        reason: String,
+    },
+    Unsupported {
+        source: RevisionSource,
+        reason: String,
+    },
+    Invalid {
+        source: RevisionSource,
+        raw_value: Vec<u8>,
+        reason: String,
+    },
+}
+
+impl RevisionObservation {
+    pub fn known(revision: u32, source: RevisionSource) -> Self {
+        Self::Known {
+            revision,
+            source,
+            raw_value: None,
+        }
+    }
+
+    pub fn known_raw(revision: u32, source: RevisionSource, raw_value: Vec<u8>) -> Self {
+        Self::Known {
+            revision,
+            source,
+            raw_value: Some(raw_value),
+        }
+    }
+
+    pub fn unavailable(source: RevisionSource, reason: impl Into<alloc::string::String>) -> Self {
+        Self::Unavailable {
+            source,
+            reason: reason.into(),
+        }
+    }
+
+    pub fn known_revision(&self) -> Option<u32> {
+        match self {
+            Self::Known { revision, .. } => Some(*revision),
+            Self::Unavailable { .. } | Self::Unsupported { .. } | Self::Invalid { .. } => None,
+        }
+    }
+
+    pub fn source(&self) -> RevisionSource {
+        match self {
+            Self::Known { source, .. }
+            | Self::Unavailable { source, .. }
+            | Self::Unsupported { source, .. }
+            | Self::Invalid { source, .. } => *source,
+        }
     }
 }
 

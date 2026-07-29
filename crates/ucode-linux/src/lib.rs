@@ -22,7 +22,8 @@ pub use firmware::{FirmwareTree, probe_firmware_tree};
 pub use paths::{default_firmware_paths, default_initrd_candidates};
 pub use sysfs::{CpuOnlineState, read_microcode_version};
 pub use virt::{
-    VirtualizationInfo, VirtualizationKind, detect_virtualization, detect_virtualization_info,
+    ExecutionEnvironment, MicrocodeAuthority, VirtualizationInfo, VirtualizationKind,
+    detect_virtualization, detect_virtualization_info,
 };
 
 use std::path::PathBuf;

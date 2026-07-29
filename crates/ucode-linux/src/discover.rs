@@ -3,7 +3,9 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
-use ucode_core::{CpuIdentity, CpuSignature, PlatformMask, Vendor};
+use ucode_core::{
+    CpuIdentity, CpuSignature, PlatformMask, RevisionObservation, RevisionSource, Vendor,
+};
 
 use crate::cpuinfo::{CpuInfoCpu, parse_cpuinfo, read_cpuinfo};
 use crate::firmware::{FirmwareTree, probe_firmware_tree};
@@ -20,6 +22,10 @@ pub struct HostCpu {
     pub physical_id: Option<u32>,
     pub core_id: Option<u32>,
     pub brand: Option<String>,
+    /// Active microcode observation with source and availability semantics.
+    pub revision: RevisionObservation,
+    /// Windows `Previous Update Revision`, when exposed; diagnostic only.
+    pub previous_revision: Option<RevisionObservation>,
 }
 
 /// Aggregate system view used by status / plan / match.
@@ -94,6 +100,11 @@ pub fn system_from_identity(identity: CpuIdentity) -> SystemState {
             physical_id: Some(0),
             core_id: Some(0),
             brand: None,
+            revision: RevisionObservation::unavailable(
+                RevisionSource::Manual,
+                "manual identity does not include an active microcode revision",
+            ),
+            previous_revision: None,
         }],
         unique_identities: vec![identity],
         mixed_signature: false,
@@ -101,6 +112,7 @@ pub fn system_from_identity(identity: CpuIdentity) -> SystemState {
         virtualization: VirtualizationKind::Unknown,
         virtualization_info: VirtualizationInfo {
             kind: VirtualizationKind::Unknown,
+            authority: crate::MicrocodeAuthority::Unknown,
             reason: "manual identity; virtualization not probed".to_string(),
             hypervisor_vendor: None,
             hypervisor_bit: false,
@@ -120,8 +132,12 @@ fn discover_from_proc() -> Result<SystemState> {
 
     for info in &infos {
         let mut identity = info.to_identity();
+        let mut revision = revision_from_proc(info.microcode);
         // Prefer sysfs revision when present (more authoritative).
         if let Ok(Some(rev)) = read_microcode_version(info.processor) {
+            identity.current_revision = Some(rev);
+            revision = RevisionObservation::known(rev, RevisionSource::LinuxSysfs);
+        } else if let Some(rev) = revision.known_revision() {
             identity.current_revision = Some(rev);
         }
         let online = cpu_online_state(info.processor);
@@ -132,6 +148,8 @@ fn discover_from_proc() -> Result<SystemState> {
             physical_id: info.physical_id,
             core_id: info.core_id,
             brand: None,
+            revision,
+            previous_revision: None,
         });
     }
 
@@ -182,14 +200,36 @@ fn discover_from_cpuid() -> Result<SystemState> {
             .get_processor_brand_string()
             .map(|b| b.as_str().trim().to_string())
             .filter(|s| !s.is_empty());
-        let cpus = vec![HostCpu {
-            processor: 0,
-            identity,
-            online: CpuOnlineState::Online,
-            physical_id: Some(0),
-            core_id: Some(0),
-            brand,
-        }];
+        #[cfg(windows)]
+        let count = ucode_windows::logical_processor_count().max(1);
+        #[cfg(not(windows))]
+        let count = 1;
+        let mut cpus = Vec::with_capacity(count);
+        for processor in 0..count as u32 {
+            #[cfg(windows)]
+            let revision = ucode_windows::update_revision(processor);
+            #[cfg(windows)]
+            let previous_revision = ucode_windows::previous_update_revision(processor);
+            #[cfg(not(windows))]
+            let revision = RevisionObservation::unavailable(
+                RevisionSource::Unavailable,
+                "no active microcode revision source is available off Linux/Windows",
+            );
+            #[cfg(not(windows))]
+            let previous_revision = None;
+            let mut cpu_identity = identity.clone();
+            cpu_identity.current_revision = revision.known_revision();
+            cpus.push(HostCpu {
+                processor,
+                identity: cpu_identity,
+                online: CpuOnlineState::Online,
+                physical_id: None,
+                core_id: None,
+                brand: brand.clone(),
+                revision,
+                previous_revision,
+            });
+        }
         return Ok(finalise(cpus, "cpuid".to_string()));
     }
     #[cfg(not(any(target_arch = "x86_64", target_arch = "x86")))]
@@ -215,12 +255,14 @@ fn cpuid_brand_string() -> Option<String> {
 
 fn finalise(cpus: Vec<HostCpu>, source: String) -> SystemState {
     let mut sigs: BTreeSet<(Vendor, u32)> = BTreeSet::new();
-    let mut revs: BTreeSet<Option<u32>> = BTreeSet::new();
+    let mut revs: BTreeSet<u32> = BTreeSet::new();
     let mut unique: Vec<CpuIdentity> = Vec::new();
 
     for c in &cpus {
         sigs.insert((c.identity.vendor, c.identity.signature.raw()));
-        revs.insert(c.identity.current_revision);
+        if let Some(revision) = c.revision.known_revision() {
+            revs.insert(revision);
+        }
         if !unique.iter().any(|u| {
             u.vendor == c.identity.vendor
                 && u.signature == c.identity.signature
@@ -256,6 +298,35 @@ fn finalise(cpus: Vec<HostCpu>, source: String) -> SystemState {
     }
 }
 
+fn revision_from_proc(value: Option<u32>) -> RevisionObservation {
+    match value {
+        Some(u32::MAX) => RevisionObservation::unavailable(
+            RevisionSource::ProcCpuinfo,
+            "kernel reported sentinel 0xffffffff; the active revision is hidden or virtualized by the host",
+        ),
+        Some(revision) => RevisionObservation::known(revision, RevisionSource::ProcCpuinfo),
+        None => RevisionObservation::unavailable(
+            RevisionSource::ProcCpuinfo,
+            "/proc/cpuinfo does not report a microcode revision",
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proc_sentinel_is_not_a_revision() {
+        let observation = revision_from_proc(Some(u32::MAX));
+        assert_eq!(observation.known_revision(), None);
+        assert!(matches!(
+            observation,
+            RevisionObservation::Unavailable { .. }
+        ));
+    }
+}
+
 /// Parse cpuinfo text into a system state (tests / offline analysis).
 pub fn system_from_cpuinfo_text(text: &str) -> Result<SystemState> {
     let infos: Vec<CpuInfoCpu> = parse_cpuinfo(text)?;
@@ -263,11 +334,17 @@ pub fn system_from_cpuinfo_text(text: &str) -> Result<SystemState> {
         .into_iter()
         .map(|info| HostCpu {
             processor: info.processor,
-            identity: info.to_identity(),
+            identity: {
+                let mut identity = info.to_identity();
+                identity.current_revision = revision_from_proc(info.microcode).known_revision();
+                identity
+            },
             online: CpuOnlineState::Online,
             physical_id: info.physical_id,
             core_id: info.core_id,
             brand: None,
+            revision: revision_from_proc(info.microcode),
+            previous_revision: None,
         })
         .collect();
     Ok(finalise(cpus, "cpuinfo-text".to_string()))

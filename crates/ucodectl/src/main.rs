@@ -44,7 +44,7 @@ fn init_tracing(verbose: u8) {
 
 fn run(cli: Cli) -> Result<i32> {
     match cli.command {
-        Command::Status(args) => cli::status::run(args, cli.format),
+        Command::Status(args) => cli::status::run(args, cli.format, cli.verbose),
         Command::Inspect(args) => cli::inspect::run(args, cli.format),
         Command::Validate(args) => cli::validate::run(args, cli.format),
         Command::List(args) => cli::list::run(args, cli.format),

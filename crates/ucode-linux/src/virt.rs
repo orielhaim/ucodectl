@@ -24,12 +24,28 @@ use serde::{Deserialize, Serialize};
 /// Detected virtualization / container environment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum VirtualizationKind {
-    /// Physical machine, or type-1 hypervisor *host* / root partition.
-    BareMetal,
+pub enum ExecutionEnvironment {
+    /// Native operating system with no detected hypervisor layer.
+    Native,
+    /// Windows / Hyper-V parent partition, with physical-device access.
+    HypervisorRoot,
     /// Confident guest under a hypervisor; microcode is typically host-managed.
-    VirtualMachine,
+    VirtualMachineGuest,
     Container,
+    Unknown,
+}
+
+/// Compatibility name used by the existing policy API.
+pub type VirtualizationKind = ExecutionEnvironment;
+
+/// The layer that is expected to control active microcode for this process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MicrocodeAuthority {
+    OperatingSystem,
+    FirmwareAndOperatingSystem,
+    HypervisorHost,
+    FirmwareOnly,
     Unknown,
 }
 
@@ -37,6 +53,7 @@ pub enum VirtualizationKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VirtualizationInfo {
     pub kind: VirtualizationKind,
+    pub authority: MicrocodeAuthority,
     /// Short human-readable reason for the decision.
     pub reason: String,
     /// Hypervisor identity (e.g. `HyperV`, `KVM`, `VMware`), if present.
@@ -51,6 +68,7 @@ impl Default for VirtualizationInfo {
     fn default() -> Self {
         Self {
             kind: VirtualizationKind::Unknown,
+            authority: MicrocodeAuthority::Unknown,
             reason: "not probed".to_string(),
             hypervisor_vendor: None,
             hypervisor_bit: false,
@@ -69,6 +87,7 @@ pub fn detect_virtualization_info() -> VirtualizationInfo {
     if is_container() {
         return VirtualizationInfo {
             kind: VirtualizationKind::Container,
+            authority: MicrocodeAuthority::Unknown,
             reason: "container markers present (/.dockerenv, cgroup, or $container)".to_string(),
             hypervisor_vendor: None,
             hypervisor_bit: false,
@@ -76,13 +95,32 @@ pub fn detect_virtualization_info() -> VirtualizationInfo {
         };
     }
 
-    let dmi_guest = dmi_guest_signal();
     let hv = hypervisor_probe();
+
+    // WSL2 deliberately exposes the physical CPU's Hyper-V CPUID signature,
+    // but normally exposes neither the Hyper-V guest DMI product name nor the
+    // root-partition CreatePartitions privilege.  It is therefore a known
+    // false negative for a DMI + CPUID-only probe.  The Microsoft kernel
+    // marker is an explicit guest signal, so handle it before the generic
+    // hypervisor logic.
+    if let Some(reason) = wsl_guest_signal() {
+        return VirtualizationInfo {
+            kind: VirtualizationKind::VirtualMachineGuest,
+            authority: MicrocodeAuthority::HypervisorHost,
+            reason,
+            hypervisor_vendor: hv.vendor_label,
+            hypervisor_bit: hv.bit,
+            hyperv_root: false,
+        };
+    }
+
+    let dmi_guest = dmi_guest_signal();
 
     // Strong DMI guest product name always wins.
     if let Some(reason) = dmi_guest {
         return VirtualizationInfo {
-            kind: VirtualizationKind::VirtualMachine,
+            kind: VirtualizationKind::VirtualMachineGuest,
+            authority: MicrocodeAuthority::HypervisorHost,
             reason,
             hypervisor_vendor: hv.vendor_label.clone(),
             hypervisor_bit: hv.bit,
@@ -92,7 +130,8 @@ pub fn detect_virtualization_info() -> VirtualizationInfo {
 
     if !hv.bit {
         return VirtualizationInfo {
-            kind: VirtualizationKind::BareMetal,
+            kind: VirtualizationKind::Native,
+            authority: MicrocodeAuthority::FirmwareAndOperatingSystem,
             reason: "no guest DMI markers and no hypervisor present bit".to_string(),
             hypervisor_vendor: None,
             hypervisor_bit: false,
@@ -103,7 +142,8 @@ pub fn detect_virtualization_info() -> VirtualizationInfo {
     // Hypervisor present — classify carefully.
     if hv.hyperv_root {
         return VirtualizationInfo {
-            kind: VirtualizationKind::BareMetal,
+            kind: VirtualizationKind::HypervisorRoot,
+            authority: MicrocodeAuthority::FirmwareAndOperatingSystem,
             reason: "Hyper-V root partition (type-1 host on physical hardware; \
                      common with Windows VBS/WSL2/Hyper-V enabled)"
                 .to_string(),
@@ -115,7 +155,8 @@ pub fn detect_virtualization_info() -> VirtualizationInfo {
 
     if hv.is_guest_vendor {
         return VirtualizationInfo {
-            kind: VirtualizationKind::VirtualMachine,
+            kind: VirtualizationKind::VirtualMachineGuest,
+            authority: MicrocodeAuthority::HypervisorHost,
             reason: format!(
                 "guest hypervisor identity {:?}",
                 hv.vendor_label.as_deref().unwrap_or("unknown")
@@ -126,12 +167,13 @@ pub fn detect_virtualization_info() -> VirtualizationInfo {
         };
     }
 
-    // Bit set but not a known guest (unknown vendor, or Hyper-V without root
-    // proof on non-Windows). Prefer bare metal over a false VM claim.
+    // A hypervisor is definitely present but this process is neither a known
+    // guest nor a root partition. Do not relabel that uncertainty as native.
     VirtualizationInfo {
-        kind: VirtualizationKind::BareMetal,
+        kind: VirtualizationKind::Unknown,
+        authority: MicrocodeAuthority::Unknown,
         reason: format!(
-            "hypervisor bit set ({:?}) but not classified as a guest",
+            "hypervisor present ({:?}) but partition role is not known",
             hv.vendor_label.as_deref().unwrap_or("no vendor id")
         ),
         hypervisor_vendor: hv.vendor_label,
@@ -160,6 +202,51 @@ fn is_container() -> bool {
         }
     }
     false
+}
+
+/// Detect WSL from Linux-kernel markers, which are authoritative inside a WSL
+/// distribution and do not depend on DMI being virtualized correctly.
+fn wsl_guest_signal() -> Option<String> {
+    if !cfg!(target_os = "linux") {
+        return None;
+    }
+
+    let osrelease = std::fs::read_to_string("/proc/sys/kernel/osrelease")
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+    let version = std::fs::read_to_string("/proc/version")
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+    let env_marker =
+        std::env::var_os("WSL_INTEROP").is_some() || std::env::var_os("WSL_DISTRO_NAME").is_some();
+
+    wsl_guest_reason(&osrelease, &version, env_marker)
+}
+
+fn wsl_guest_reason(osrelease: &str, version: &str, env_marker: bool) -> Option<String> {
+    let release = osrelease.to_ascii_lowercase();
+    let kernel_version = version.to_ascii_lowercase();
+    if release.contains("microsoft-standard-wsl") {
+        return Some(
+            "WSL2 guest detected from the Microsoft WSL kernel; microcode is managed by the Windows/Hyper-V host"
+                .to_string(),
+        );
+    }
+    if release.contains("microsoft") || kernel_version.contains("microsoft") {
+        return Some(
+            "WSL guest detected from the Microsoft Linux kernel; microcode is managed by the Windows host"
+                .to_string(),
+        );
+    }
+    if env_marker {
+        return Some(
+            "WSL guest detected from WSL environment markers; microcode is managed by the Windows host"
+                .to_string(),
+        );
+    }
+    None
 }
 
 /// Returns `Some(reason)` only for *strong* guest DMI signals.
@@ -333,11 +420,33 @@ mod tests {
         // Must classify as something concrete on x86.
         assert!(matches!(
             info.kind,
-            VirtualizationKind::BareMetal
-                | VirtualizationKind::VirtualMachine
+            VirtualizationKind::Native
+                | VirtualizationKind::HypervisorRoot
+                | VirtualizationKind::VirtualMachineGuest
                 | VirtualizationKind::Container
                 | VirtualizationKind::Unknown
         ));
         assert!(!info.reason.is_empty());
+    }
+
+    #[test]
+    fn recognizes_wsl2_kernel_without_dmi() {
+        let reason = wsl_guest_reason(
+            "6.18.33.2-microsoft-standard-WSL2",
+            "Linux version 6.18.33.2-microsoft-standard-WSL2",
+            false,
+        );
+        assert!(reason.is_some_and(|r| r.contains("WSL2 guest")));
+    }
+
+    #[test]
+    fn recognizes_wsl_environment_marker() {
+        let reason = wsl_guest_reason("6.12.0-generic", "Linux version 6.12.0", true);
+        assert!(reason.is_some_and(|r| r.contains("WSL guest")));
+    }
+
+    #[test]
+    fn does_not_mistake_regular_linux_for_wsl() {
+        assert!(wsl_guest_reason("6.12.0-generic", "Linux version 6.12.0", false).is_none());
     }
 }

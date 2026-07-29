@@ -97,7 +97,7 @@ pub fn evaluate(input: &PlanInput<'_>) -> Plan {
     let mut would_change = false;
 
     // Virtualization is an advisory signal, never a hard override of patch status.
-    if input.system.virtualization == VirtualizationKind::VirtualMachine {
+    if input.system.virtualization == VirtualizationKind::VirtualMachineGuest {
         messages.push(format!(
             "guest virtualization detected ({}); microcode is often managed by the hypervisor host",
             input.system.virtualization_info.reason
@@ -105,11 +105,9 @@ pub fn evaluate(input: &PlanInput<'_>) -> Plan {
         if overall == SystemStatus::VirtualMachineHostManaged {
             action = Action::NoOpVirtualMachine;
         }
-    } else if input.system.virtualization_info.hypervisor_bit
-        && input.system.virtualization == VirtualizationKind::BareMetal
-    {
+    } else if input.system.virtualization == VirtualizationKind::HypervisorRoot {
         messages.push(format!(
-            "hypervisor present bit set but classified as bare metal/host: {}",
+            "Hyper-V root partition detected ({}); this is a normal Windows host configuration",
             input.system.virtualization_info.reason
         ));
     }
@@ -390,7 +388,7 @@ fn overall_status(
     // Only surface VirtualMachineHostManaged when we are a confident guest *and*
     // there is no stronger patch-related status (e.g. no catalog loaded).
     let base = priority_status(statuses.into_iter());
-    if system.virtualization == VirtualizationKind::VirtualMachine
+    if system.virtualization == VirtualizationKind::VirtualMachineGuest
         && matches!(
             base,
             SystemStatus::Unknown | SystemStatus::NoCompatiblePatch | SystemStatus::UpToDate

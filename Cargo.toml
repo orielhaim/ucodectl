@@ -7,6 +7,7 @@ members = [
     "crates/ucode-archive",
     "crates/ucode-catalog",
     "crates/ucode-linux",
+    "crates/ucode-windows",
     "crates/ucode-boot",
     "crates/ucode-policy",
     "crates/ucode-transaction",
@@ -52,6 +53,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 object = { version = "0.37", default-features = false, features = ["read", "pe"] }
 miette = { version = "7", features = ["fancy"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry", "Win32_System_Threading"] }
 
 [profile.release]
 lto = "thin"

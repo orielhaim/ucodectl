@@ -10,7 +10,7 @@ pub mod plan;
 pub mod state;
 
 pub use plan::{Action, Plan, PlanInput, PlannedWrite, evaluate};
-pub use state::SystemStatus;
+pub use state::{CpuEvaluation, SystemStatus};
 
 use thiserror::Error;
 

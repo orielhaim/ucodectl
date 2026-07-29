@@ -159,7 +159,6 @@ fn read_file_nofollow(path: &Path, max: u64) -> Result<Vec<u8>> {
     {
         use rustix::fs::{Mode, OFlags};
         use std::fs::File;
-        use std::os::fd::FromRawFd;
         let fd = rustix::fs::open(
             path,
             OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
@@ -169,8 +168,7 @@ fn read_file_nofollow(path: &Path, max: u64) -> Result<Vec<u8>> {
             path: path.to_path_buf(),
             source: std::io::Error::from(e),
         })?;
-        // SAFETY: freshly opened fd, sole owner.
-        let mut file = unsafe { File::from_raw_fd(fd.into_raw_fd()) };
+        let mut file = File::from(fd);
         let mut buf = Vec::new();
         file.by_ref()
             .take(max)

@@ -817,6 +817,7 @@ dependencies = [
  "thiserror",
  "tracing",
  "ucode-core",
+ "ucode-windows",
 ]
 
 [[package]]
@@ -844,6 +845,14 @@ dependencies = [
  "ucode-catalog",
  "ucode-core",
  "ucode-policy",
+]
+
+[[package]]
+name = "ucode-windows"
+version = "0.1.0"
+dependencies = [
+ "ucode-core",
+ "windows-sys",
 ]
 
 [[package]]

@@ -66,6 +66,11 @@ ucodectl apply /lib/firmware/intel-ucode --yes --early-output ucode-early.cpio
 # Post-reboot check
 ucodectl verify --expect-revision 0x000000b4
 
+# Status uses grouped logical processors by default. Add provenance / raw
+# observations for diagnostics, or expand every logical processor.
+ucodectl status --verbose --raw
+ucodectl status --per-cpu
+
 # Packaging helpers
 ucodectl schema
 ucodectl completions bash
@@ -74,6 +79,12 @@ ucodectl manpages --out-dir man/
 
 Stdout is reserved for command results; diagnostics go to stderr.
 Every command accepts `--format json`.
+
+`status` distinguishes a missing catalog from a catalog with zero matching
+patches, and reports the execution environment separately from microcode
+authority. On Windows it reads the active revision from the read-only
+`Update Revision` registry value; on WSL2 it reports the revision as
+host-managed rather than treating the guest sentinel value as a revision.
 
 ## Design principles
 

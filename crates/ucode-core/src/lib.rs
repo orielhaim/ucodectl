@@ -24,7 +24,9 @@ pub mod patch;
 pub mod select;
 pub mod validate;
 
-pub use cpu::{CpuIdentity, CpuSignature, PlatformMask, Vendor};
+pub use cpu::{
+    CpuIdentity, CpuSignature, PlatformMask, RevisionObservation, RevisionSource, Vendor,
+};
 pub use date::UcodeDate;
 pub use error::{CoreError, CoreResult};
 pub use patch::{

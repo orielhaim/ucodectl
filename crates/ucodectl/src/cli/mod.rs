@@ -97,6 +97,12 @@ pub struct StatusArgs {
     /// Force Intel platform ID (0-7).
     #[arg(long)]
     pub platform_id: Option<u32>,
+    /// Show one entry for every logical processor instead of grouping identical observations.
+    #[arg(long)]
+    pub per_cpu: bool,
+    /// Include raw observation data for diagnostics and bug reports.
+    #[arg(long)]
+    pub raw: bool,
 }
 
 #[derive(Debug, clap::Args)]

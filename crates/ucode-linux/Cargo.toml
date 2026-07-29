@@ -14,3 +14,4 @@ thiserror = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["std"] }
 raw-cpuid.workspace = true
 tracing.workspace = true
+ucode-windows = { path = "../ucode-windows", version = "0.1.0" }
