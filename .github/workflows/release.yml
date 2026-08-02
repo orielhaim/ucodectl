@@ -1,0 +1,307 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release (for example v0.1.0)"
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  RUST_TOOLCHAIN: "1.97"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - name: Validate tag format
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag }}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag must be a semantic version prefixed with v (for example v0.1.0)"
+            exit 1
+          fi
+
+      - name: Checkout tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Extract and validate version
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag }}"
+          version="${tag#v}"
+          cargo_version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "ucodectl") | .version')"
+
+          if [ -z "$cargo_version" ] || [ "$cargo_version" = "null" ]; then
+            echo "::error::Could not resolve the ucodectl package version"
+            exit 1
+          fi
+
+          if [ "$version" != "$cargo_version" ]; then
+            echo "::error::Tag ${tag} does not match ucodectl version ${cargo_version}"
+            exit 1
+          fi
+
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+          if [[ "$version" =~ (alpha|beta|rc|dev|pre) ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  approval:
+    name: Production approval
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Approve release
+        run: echo "Approved release of ${{ needs.validate.outputs.tag }}"
+
+  build:
+    name: Build - ${{ matrix.target }}
+    needs: [validate, approval]
+    runs-on: ${{ matrix.host }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            cross: false
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            cross: true
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            cross: true
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            cross: true
+          - host: macos-latest
+            target: x86_64-apple-darwin
+            cross: false
+          - host: macos-latest
+            target: aarch64-apple-darwin
+            cross: false
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+            cross: false
+          - host: windows-latest
+            target: aarch64-pc-windows-msvc
+            cross: false
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: release-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: release-${{ matrix.target }}-
+
+      - name: Install cross
+        if: matrix.cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build natively
+        if: ${{ !matrix.cross }}
+        run: cargo build --release --locked --target ${{ matrix.target }} -p ucodectl
+
+      - name: Build with cross
+        if: matrix.cross
+        run: cross build --release --locked --target ${{ matrix.target }} -p ucodectl
+
+      - name: Package binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.validate.outputs.version }}"
+          target="${{ matrix.target }}"
+          package="ucodectl-${version}-${target}"
+          extension=""
+
+          if [[ "$target" == *windows* ]]; then
+            extension=".exe"
+          fi
+
+          binary="target/${target}/release/ucodectl${extension}"
+          test -f "$binary" || {
+            echo "::error::Release binary not found: ${binary}"
+            exit 1
+          }
+
+          mkdir -p "$package"
+          cp "$binary" "$package/"
+          cp README.md LICENSE "$package/"
+
+          if [[ "$target" == *windows* ]]; then
+            7z a -bb0 "${package}.zip" "$package" >/dev/null
+            sha256sum "${package}.zip" > "${package}.zip.sha256"
+          else
+            tar czf "${package}.tar.gz" "$package"
+            sha256sum "${package}.tar.gz" > "${package}.tar.gz.sha256"
+          fi
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: binary-${{ matrix.target }}
+          path: |
+            ucodectl-${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz
+            ucodectl-${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
+            ucodectl-${{ needs.validate.outputs.version }}-${{ matrix.target }}.zip
+            ucodectl-${{ needs.validate.outputs.version }}-${{ matrix.target }}.zip.sha256
+          if-no-files-found: error
+
+  support-artifacts:
+    name: Generate support artifacts
+    needs: [validate, approval]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Build ucodectl
+        run: cargo build --release --locked -p ucodectl
+
+      - name: Generate schemas, completions, and man pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="target/release/ucodectl"
+          mkdir -p support/schemas support/completions support/man
+
+          "$bin" schema all --out-dir support/schemas
+          "$bin" completions bash > support/completions/ucodectl.bash
+          "$bin" completions fish > support/completions/ucodectl.fish
+          "$bin" completions zsh > support/completions/_ucodectl
+          "$bin" completions powershell > support/completions/ucodectl.ps1
+          "$bin" completions elvish > support/completions/ucodectl.elv
+          "$bin" manpages --out-dir support/man
+
+          tar czf "ucodectl-${{ needs.validate.outputs.version }}-support.tar.gz" -C support .
+          sha256sum "ucodectl-${{ needs.validate.outputs.version }}-support.tar.gz" > "ucodectl-${{ needs.validate.outputs.version }}-support.tar.gz.sha256"
+
+      - name: Upload support artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: support-artifacts
+          path: |
+            ucodectl-${{ needs.validate.outputs.version }}-support.tar.gz
+            ucodectl-${{ needs.validate.outputs.version }}-support.tar.gz.sha256
+          if-no-files-found: error
+
+  release:
+    name: Create draft release
+    needs: [validate, build, support-artifacts]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: binary-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Download support artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: support-artifacts
+          path: artifacts
+
+      - name: Create draft GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.validate.outputs.tag }}
+          name: ucodectl ${{ needs.validate.outputs.tag }}
+          draft: true
+          prerelease: ${{ needs.validate.outputs.prerelease == 'true' }}
+          generate_release_notes: true
+          files: |
+            artifacts/*.tar.gz
+            artifacts/*.zip
+            artifacts/*.sha256
+
+  attest:
+    name: Attest release artifacts
+    needs: [validate, build, support-artifacts]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: binary-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Download support artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: support-artifacts
+          path: artifacts
+
+      - name: Attest archives
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            artifacts/*.tar.gz
+            artifacts/*.zip
