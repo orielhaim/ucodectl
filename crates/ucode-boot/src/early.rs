@@ -143,7 +143,7 @@ pub fn build_early_cpio(input: EarlyBuildInput<'_>) -> Result<EarlyBuildResult> 
                     for e in &input.catalog.amd_equivalence {
                         if e.equiv_id == eid {
                             used_equiv.insert(
-                                // dedupe by packing — builder dedupes properly
+                                // dedupe by packing - builder dedupes properly
                                 e.equiv_id, *e,
                             );
                         }

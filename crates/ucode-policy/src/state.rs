@@ -74,7 +74,7 @@ pub struct CpuEvaluation {
 /// Summarise system-level concerns from host state alone.
 ///
 /// Virtualization is **not** pushed here as a status concern that overrides
-/// patch evaluation — it is reported separately via messages / overall logic.
+/// patch evaluation - it is reported separately via messages / overall logic.
 pub fn host_concerns(system: &SystemState) -> Vec<SystemStatus> {
     let mut out = Vec::new();
     if system.mixed_signature || system.mixed_revision {

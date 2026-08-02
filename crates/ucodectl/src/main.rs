@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-//! ucodectl — Inspect, validate and manage CPU microcode.
+//! ucodectl - Inspect, validate and manage CPU microcode.
 
 mod cli;
 mod error;

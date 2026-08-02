@@ -1,6 +1,6 @@
 //! UKI (Unified Kernel Image) inspection via PE/COFF sections.
 //!
-//! Per UAPI.5, microcode lives in a `.ucode` section. We only *read* it —
+//! Per UAPI.5, microcode lives in a `.ucode` section. We only *read* it -
 //! mutating a signed UKI would break Secure Boot signatures.
 
 use std::path::Path;

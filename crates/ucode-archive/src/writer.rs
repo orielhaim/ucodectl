@@ -113,7 +113,7 @@ fn write_record(out: &mut Vec<u8>, ino: u32, mode: u32, nlink: u32, name: &str, 
         0, // uid
         0, // gid
         nlink,
-        0,                 // mtime — always zero, for reproducibility
+        0,                 // mtime - always zero, for reproducibility
         data.len() as u32, // filesize
         0,                 // devmajor
         0,                 // devminor

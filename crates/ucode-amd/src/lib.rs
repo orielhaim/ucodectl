@@ -20,7 +20,7 @@
 //! **Minimum base revision.** AMD publishes, for some patches, a minimum
 //! currently-loaded revision required before the patch will be accepted. That
 //! value is *not* present anywhere in the container; it is documented in
-//! `linux-firmware/amd-ucode/README`. We therefore never synthesise it here —
+//! `linux-firmware/amd-ucode/README`. We therefore never synthesise it here -
 //! see `ucode_catalog::sidecar` for ingestion of that metadata.
 
 pub mod container;

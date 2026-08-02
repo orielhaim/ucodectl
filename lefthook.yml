@@ -9,4 +9,5 @@ pre-commit:
     - name: rust-clippy
       glob: "**/*.rs"
       run: >
-        cargo clippy --workspace --all-targets --all-features -- -D warnings
+        cargo clippy --workspace --all-targets --all-features -- -D warnings &&
+        cargo doc --workspace --all-features --no-deps --locked

@@ -98,11 +98,11 @@ a revision.
 
 ## Design principles
 
-1. **Read-only by default** — only `apply` mutates the filesystem.
+1. **Read-only by default** - only `apply` mutates the filesystem.
 2. **No network** in the main tool.
-3. **Early boot first** — produce artifacts for initrd/UKI loaders, not late loading.
+3. **Early boot first** - produce artifacts for initrd/UKI loaders, not late loading.
 4. **Never invent or “repair” microcode bytes**.
-5. **Parsing ≠ trust** — structural validity, authenticity and applicability are separate.
+5. **Parsing ≠ trust** - structural validity, authenticity and applicability are separate.
 6. **Plan before apply**.
 7. **No direct mutation of signed UKIs**.
 8. **Deterministic artifacts** (zero timestamps, stable ordering).

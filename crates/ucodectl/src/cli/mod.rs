@@ -20,7 +20,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 use crate::util::VendorArg;
 
-/// ucodectl — Inspect, validate and manage CPU microcode.
+/// ucodectl - Inspect, validate and manage CPU microcode.
 #[derive(Debug, Parser)]
 #[command(
     name = "ucodectl",
@@ -297,7 +297,7 @@ pub struct ApplyArgs {
     /// Directory for backups of replaced files.
     #[arg(long)]
     pub backup_dir: Option<PathBuf>,
-    /// Transaction journal path. Defaults to /var/lib/ucodectl/transactions/<plan-id>.json on Linux.
+    /// Transaction journal path. Defaults to `/var/lib/ucodectl/transactions/<plan-id>.json` on Linux.
     #[arg(long)]
     pub journal: Option<PathBuf>,
     /// Assume yes and skip the interactive confirmation prompt.

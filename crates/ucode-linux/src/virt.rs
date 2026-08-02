@@ -58,7 +58,7 @@ pub struct VirtualizationInfo {
     pub reason: String,
     /// Hypervisor identity (e.g. `HyperV`, `KVM`, `VMware`), if present.
     pub hypervisor_vendor: Option<String>,
-    /// True when CPUID.1:ECX[31] is set.
+    /// True when CPUID.1:ECX\[31\] is set.
     pub hypervisor_bit: bool,
     /// True when we believe this process runs in a Hyper-V *root* partition.
     pub hyperv_root: bool,
@@ -139,7 +139,7 @@ pub fn detect_virtualization_info() -> VirtualizationInfo {
         };
     }
 
-    // Hypervisor present — classify carefully.
+    // Hypervisor present - classify carefully.
     if hv.hyperv_root {
         return VirtualizationInfo {
             kind: VirtualizationKind::HypervisorRoot,
@@ -252,7 +252,7 @@ fn wsl_guest_reason(osrelease: &str, version: &str, env_marker: bool) -> Option<
 /// Returns `Some(reason)` only for *strong* guest DMI signals.
 ///
 /// Deliberately does **not** treat `sys_vendor == "Microsoft Corporation"` alone
-/// as a VM — that string appears on physical Surface devices and is useless
+/// as a VM - that string appears on physical Surface devices and is useless
 /// under Hyper-V root.
 fn dmi_guest_signal() -> Option<String> {
     let product = read_dmi("product_name").unwrap_or_default();
@@ -347,7 +347,7 @@ fn hypervisor_probe() -> HvProbe {
                 } else if cfg!(windows) {
                     // No CreatePartitions bit: could be a real Hyper-V guest
                     // on Windows, OR an incomplete leaf. Prefer bare metal on
-                    // Windows without DMI guest product — false VM is worse.
+                    // Windows without DMI guest product - false VM is worse.
                     // Real Hyper-V guests almost always have product_name
                     // "Virtual Machine" which we already checked.
                     (false, false)

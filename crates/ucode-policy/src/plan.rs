@@ -114,7 +114,7 @@ pub fn evaluate(input: &PlanInput<'_>) -> Plan {
 
     if input.system.os != "linux" {
         messages.push(format!(
-            "running on {}; microcode early-load paths and sysfs revisions are Linux-specific — \
+            "running on {}; microcode early-load paths and sysfs revisions are Linux-specific - \
 CPU identity comes from CPUID; pass firmware with --source / path arguments to evaluate patches",
             input.system.os
         ));
