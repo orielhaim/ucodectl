@@ -5,10 +5,12 @@ use ucode_core::Severity;
 
 use super::{InspectArgs, OutputFormat};
 use crate::output::emit;
-use crate::util::{apply_amd_sidecar, default_limits, load_catalog};
+use crate::util::{apply_amd_sidecar, default_limits, load_catalog_named};
 
 #[derive(Serialize)]
 struct InspectJson {
+    schema_version: u32,
+    command: &'static str,
     manifest: Manifest,
     findings: Vec<FindingJson>,
     sources: Vec<SourceJson>,
@@ -32,8 +34,16 @@ struct SourceJson {
 }
 
 pub fn run(args: InspectArgs, format: OutputFormat) -> Result<i32> {
-    let mut catalog = load_catalog(&args.paths, default_limits(), true)?;
-    let _ = apply_amd_sidecar(&mut catalog, args.amd_readme.as_deref())?;
+    let mut catalog = load_catalog_named(
+        "inspect: failed to load inspection source",
+        &args.paths,
+        default_limits(),
+        true,
+        true,
+    )?;
+    let amd_metadata =
+        crate::util::resolve_amd_metadata(&args.paths, args.amd_metadata.as_deref())?;
+    let _ = apply_amd_sidecar(&mut catalog, amd_metadata.as_deref())?;
     let manifest = Manifest::from_catalog(&catalog, "ucodectl");
 
     let findings: Vec<FindingJson> = catalog
@@ -66,6 +76,8 @@ pub fn run(args: InspectArgs, format: OutputFormat) -> Result<i32> {
         .collect();
 
     let json = InspectJson {
+        schema_version: 1,
+        command: "inspect",
         manifest,
         findings,
         sources,
@@ -112,5 +124,5 @@ pub fn run(args: InspectArgs, format: OutputFormat) -> Result<i32> {
         out
     });
 
-    Ok(if catalog.report.has_errors() { 2 } else { 0 })
+    Ok(if catalog.report.has_errors() { 1 } else { 0 })
 }

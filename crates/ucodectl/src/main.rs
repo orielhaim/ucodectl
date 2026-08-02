@@ -1,13 +1,14 @@
 #![forbid(unsafe_code)]
 
-//! ucodectl — Inspect, validate, build and verify CPU microcode for Linux.
+//! ucodectl — Inspect, validate and manage CPU microcode.
 
 mod cli;
+mod error;
 mod output;
 mod util;
 
 use clap::Parser;
-use miette::{IntoDiagnostic, Result};
+use miette::Result;
 use tracing_subscriber::EnvFilter;
 
 use cli::{Cli, Command};
@@ -15,17 +16,35 @@ use cli::{Cli, Command};
 fn main() -> Result<()> {
     let cli = Cli::parse();
     init_tracing(cli.verbose);
+    let json_errors = json_error_requested();
     let code = match run(cli) {
         Ok(code) => code,
-        Err(e) => {
-            eprintln!("error: {e}");
-            return Err(e);
+        Err(error) if json_errors => {
+            if let Some(cli_error) = error.downcast_ref::<crate::error::CliError>() {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&crate::error::json_envelope(cli_error))
+                        .unwrap_or_default()
+                );
+                1
+            } else {
+                return Err(error);
+            }
         }
+        Err(error) => return Err(error),
     };
     if code != 0 {
         std::process::exit(code);
     }
     Ok(())
+}
+
+fn json_error_requested() -> bool {
+    let args: Vec<String> = std::env::args().collect();
+    args.iter().any(|arg| arg == "--format=json")
+        || args
+            .windows(2)
+            .any(|pair| pair[0] == "--format" && pair[1] == "json")
 }
 
 fn init_tracing(verbose: u8) {
@@ -44,24 +63,57 @@ fn init_tracing(verbose: u8) {
 
 fn run(cli: Cli) -> Result<i32> {
     match cli.command {
-        Command::Status(args) => cli::status::run(args, cli.format, cli.verbose),
-        Command::Inspect(args) => cli::inspect::run(args, cli.format),
-        Command::Validate(args) => cli::validate::run(args, cli.format),
-        Command::List(args) => cli::list::run(args, cli.format),
-        Command::Match(args) => cli::match_cmd::run(args, cli.format),
-        Command::Diff(args) => cli::diff::run(args, cli.format),
-        Command::InspectBoot(args) => cli::inspect_boot::run(args, cli.format),
-        Command::BuildEarly(args) => cli::build_early::run(args, cli.format),
-        Command::Plan(args) => cli::plan::run(args, cli.format),
-        Command::Apply(args) => cli::apply::run(args, cli.format),
-        Command::Verify(args) => cli::verify::run(args, cli.format),
+        Command::Status(args) => {
+            let format = args.output_options.format;
+            cli::status::run(args, format, cli.verbose)
+        }
+        Command::Inspect(args) => {
+            let format = args.output_options.format;
+            cli::inspect::run(args, format)
+        }
+        Command::Validate(args) => {
+            let format = args.output_options.format;
+            cli::validate::run(args, format)
+        }
+        Command::List(args) => {
+            let format = args.output_options.format;
+            cli::list::run(args, format)
+        }
+        Command::Match(args) => {
+            let format = args.output_options.format;
+            cli::match_cmd::run(args, format)
+        }
+        Command::Diff(args) => {
+            let format = args.output_options.format;
+            cli::diff::run(args, format)
+        }
+        Command::InspectBoot(args) => {
+            let format = args.output_options.format;
+            cli::inspect_boot::run(args, format)
+        }
+        Command::BuildEarly(args) => {
+            let format = args.output_options.format;
+            cli::build_early::run(args, format)
+        }
+        Command::Plan(args) => {
+            let format = args.output_options.format;
+            cli::plan::run(args, format)
+        }
+        Command::Apply(args) => {
+            let format = args.output_options.format;
+            cli::apply::run(args, format)
+        }
+        Command::Verify(args) => {
+            let format = args.output_options.format;
+            cli::verify::run(args, format)
+        }
         Command::Schema(args) => cli::schema::run(args),
-        Command::Completions { shell } => {
-            cli::completions::run(shell);
+        Command::Completions(args) => {
+            cli::completions::run(&args)?;
             Ok(0)
         }
-        Command::Manpages { out_dir } => {
-            cli::manpages::run(&out_dir).into_diagnostic()?;
+        Command::Manpages(args) => {
+            cli::manpages::run(&args.out_dir)?;
             Ok(0)
         }
     }

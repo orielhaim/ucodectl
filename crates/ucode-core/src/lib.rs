@@ -25,7 +25,8 @@ pub mod select;
 pub mod validate;
 
 pub use cpu::{
-    CpuIdentity, CpuSignature, PlatformMask, RevisionObservation, RevisionSource, Vendor,
+    CpuIdentity, CpuSignature, ObservationConfidence, ObservationScope, PlatformMask,
+    RawObservation, RevisionObservation, RevisionSource, Vendor,
 };
 pub use date::UcodeDate;
 pub use error::{CoreError, CoreResult};
@@ -37,4 +38,4 @@ pub use validate::{Finding, FindingCode, Severity, ValidationReport};
 
 /// Version of the semantic model. Bumped when the meaning of any exported
 /// enum variant changes in a way that consumers must react to.
-pub const MODEL_VERSION: u32 = 1;
+pub const MODEL_VERSION: u32 = 2;

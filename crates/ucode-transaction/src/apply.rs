@@ -18,9 +18,10 @@ pub struct ApplyOptions {
     pub backup_dir: PathBuf,
     pub journal_path: PathBuf,
     pub confinement_root: Option<PathBuf>,
-    /// Catalog used to materialise early images.
     pub catalog: Catalog,
     pub filter_cpus: Vec<CpuIdentity>,
+    pub plan_id: String,
+    pub receipt_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,11 +34,16 @@ pub struct ApplyResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplyReport {
+    pub schema_version: u32,
+    pub command: String,
+    pub transaction_id: String,
+    pub plan_id: String,
     pub dry_run: bool,
     pub committed: bool,
     pub results: Vec<ApplyResult>,
     pub messages: Vec<String>,
     pub journal_path: String,
+    pub receipt_path: Option<String>,
 }
 
 /// Execute a plan. When `dry_run` is set, only preflight + describe.
@@ -46,16 +52,21 @@ pub fn apply_plan(plan: &Plan, opts: &ApplyOptions) -> Result<ApplyReport> {
     require_ok(&pf)?;
 
     let id = format!(
-        "tx-{}",
+        "tx-{}-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
+            .unwrap_or(0),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
             .unwrap_or(0)
     );
 
     let mut journal = Journal::default();
     journal.push(JournalEntry::Begin {
         id: id.clone(),
+        plan_id: opts.plan_id.clone(),
         started_unix: SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
@@ -70,22 +81,46 @@ pub fn apply_plan(plan: &Plan, opts: &ApplyOptions) -> Result<ApplyReport> {
             messages.push(format!("dry-run: would apply {w:?}"));
         }
         return Ok(ApplyReport {
+            schema_version: 1,
+            command: "apply".to_string(),
+            transaction_id: id,
+            plan_id: opts.plan_id.clone(),
             dry_run: true,
             committed: false,
             results,
-            messages,
+            messages: messages.clone(),
             journal_path: opts.journal_path.display().to_string(),
+            receipt_path: None,
         });
     }
 
     if plan.writes.is_empty() {
         messages.push("nothing to apply".to_string());
         return Ok(ApplyReport {
+            schema_version: 1,
+            command: "apply".to_string(),
+            transaction_id: id.clone(),
+            plan_id: opts.plan_id.clone(),
             dry_run: false,
             committed: true,
             results,
-            messages,
+            messages: messages.clone(),
             journal_path: opts.journal_path.display().to_string(),
+            receipt_path: write_receipt(
+                opts.receipt_path.as_deref(),
+                &ApplyReport {
+                    schema_version: 1,
+                    command: "apply".to_string(),
+                    transaction_id: id,
+                    plan_id: opts.plan_id.clone(),
+                    dry_run: false,
+                    committed: true,
+                    results: Vec::new(),
+                    messages: messages.clone(),
+                    journal_path: opts.journal_path.display().to_string(),
+                    receipt_path: None,
+                },
+            )?,
         });
     }
 
@@ -133,7 +168,7 @@ pub fn apply_plan(plan: &Plan, opts: &ApplyOptions) -> Result<ApplyReport> {
         }
     }
 
-    journal.push(JournalEntry::Commit { id });
+    journal.push(JournalEntry::Commit { id: id.clone() });
     if let Err(e) = journal.write_to(&opts.journal_path) {
         warn!(error = %e, "failed to persist journal");
         messages.push(format!("warning: journal not written: {e}"));
@@ -160,11 +195,30 @@ pub fn apply_plan(plan: &Plan, opts: &ApplyOptions) -> Result<ApplyReport> {
         }
     }
 
-    Ok(ApplyReport {
+    let report = ApplyReport {
+        schema_version: 1,
+        command: "apply".to_string(),
+        transaction_id: id,
+        plan_id: opts.plan_id.clone(),
         dry_run: false,
         committed: true,
         results,
         messages,
         journal_path: opts.journal_path.display().to_string(),
-    })
+        receipt_path: opts.receipt_path.as_ref().map(|p| p.display().to_string()),
+    };
+    if let Some(path) = &opts.receipt_path {
+        write_receipt(Some(path), &report)?;
+    }
+    Ok(report)
+}
+
+fn write_receipt(path: Option<&Path>, report: &ApplyReport) -> Result<Option<String>> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    let bytes = serde_json::to_vec_pretty(report)
+        .map_err(|e| TransactionError::Other(format!("receipt serialize: {e}")))?;
+    atomic_write(path, &bytes)?;
+    Ok(Some(path.display().to_string()))
 }

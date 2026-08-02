@@ -267,12 +267,7 @@ fn parse_extended_table(
         return Err(IntelError::LimitExceeded("extended signature count"));
     }
     let needed = EXTENDED_TABLE_HEADER_SIZE
-        .checked_add(
-            (count as usize)
-                .checked_mul(EXTENDED_SIGNATURE_SIZE)
-                .unwrap_or(usize::MAX),
-        )
-        .unwrap_or(usize::MAX);
+        .saturating_add((count as usize).saturating_mul(EXTENDED_SIGNATURE_SIZE));
     if table.len() < needed {
         // Declared count does not fit. Report via validation, return nothing.
         return Ok(Vec::new());

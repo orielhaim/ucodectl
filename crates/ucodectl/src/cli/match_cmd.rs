@@ -7,6 +7,8 @@ use crate::util::{default_limits, load_catalog, resolve_system};
 
 #[derive(Serialize)]
 struct MatchJson {
+    schema_version: u32,
+    command: &'static str,
     cpu: CpuJson,
     best: Option<PatchJson>,
     applicable: Vec<PatchJson>,
@@ -32,12 +34,17 @@ struct PatchJson {
 }
 
 pub fn run(args: MatchArgs, format: OutputFormat) -> Result<i32> {
-    let system = resolve_system(args.signature, args.vendor, args.platform_id, args.revision)?;
+    let system = resolve_system(
+        args.signature,
+        args.vendor,
+        args.intel_platform_id,
+        args.active_revision,
+    )?;
     let identity = system
         .primary_identity()
         .cloned()
         .ok_or_else(|| miette::miette!("no CPU identity available"))?;
-    let catalog = load_catalog(&args.paths, default_limits(), false)?;
+    let catalog = load_catalog(&args.sources, default_limits(), false)?;
     let sel = catalog.select(&identity);
 
     let to_pj = |p: &ucode_core::PatchMeta| PatchJson {
@@ -51,6 +58,8 @@ pub fn run(args: MatchArgs, format: OutputFormat) -> Result<i32> {
     };
 
     let json = MatchJson {
+        schema_version: 1,
+        command: "match",
         cpu: CpuJson {
             vendor: identity.vendor.to_string(),
             signature: identity.signature.to_string(),

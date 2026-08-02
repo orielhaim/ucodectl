@@ -44,17 +44,16 @@ pub fn build_early_cpio(input: EarlyBuildInput<'_>) -> Result<EarlyBuildResult> 
         if payload.is_empty() {
             continue;
         }
-        if let Some(cpus) = input.filter_cpus {
-            if !cpus.iter().any(|c| meta.applies_to(c)) {
-                // When platform is unknown, still allow signature-only match for
-                // offline build with explicit filter that lacks platform masks.
-                let sig_ok = cpus.iter().any(|c| {
-                    c.vendor == meta.vendor
-                        && meta.matches.iter().any(|m| m.signature == c.signature)
-                });
-                if !sig_ok {
-                    continue;
-                }
+        if let Some(cpus) = input.filter_cpus
+            && !cpus.iter().any(|c| meta.applies_to(c))
+        {
+            // When platform is unknown, still allow signature-only match for
+            // offline build with explicit filter that lacks platform masks.
+            let sig_ok = cpus.iter().any(|c| {
+                c.vendor == meta.vendor && meta.matches.iter().any(|m| m.signature == c.signature)
+            });
+            if !sig_ok {
+                continue;
             }
         }
 
@@ -83,17 +82,16 @@ pub fn build_early_cpio(input: EarlyBuildInput<'_>) -> Result<EarlyBuildResult> 
                 intel_payloads.insert(key, (meta.clone(), payload.to_vec()));
             }
             Vendor::Amd => {
-                if input.best_only {
-                    if let Some(m) = meta.primary_match() {
-                        if let Some(existing) = amd_selected.iter().position(|(e, _)| {
-                            e.matches.iter().any(|em| em.signature == m.signature)
-                        }) {
-                            if amd_selected[existing].0.revision >= meta.revision {
-                                continue;
-                            }
-                            amd_selected.remove(existing);
-                        }
+                if input.best_only
+                    && let Some(m) = meta.primary_match()
+                    && let Some(existing) = amd_selected
+                        .iter()
+                        .position(|(e, _)| e.matches.iter().any(|em| em.signature == m.signature))
+                {
+                    if amd_selected[existing].0.revision >= meta.revision {
+                        continue;
                     }
+                    amd_selected.remove(existing);
                 }
                 amd_selected.push((meta.clone(), payload.to_vec()));
             }
@@ -103,7 +101,7 @@ pub fn build_early_cpio(input: EarlyBuildInput<'_>) -> Result<EarlyBuildResult> 
     // Intel: concatenate in deterministic order (already BTreeMap-sorted).
     let mut intel_blob = Vec::new();
     let mut intel_count = 0usize;
-    for (_, (_meta, payload)) in &intel_payloads {
+    for (_meta, payload) in intel_payloads.values() {
         intel_blob.extend_from_slice(payload);
         intel_count += 1;
     }

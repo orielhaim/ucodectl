@@ -136,7 +136,7 @@ pass a release tree or use --source"
         messages.push("no compatible microcode patch found in the available catalog".to_string());
     } else if overall == SystemStatus::PlatformIdUnknown {
         messages.push(
-            "Intel platform ID is unknown; pass --platform-id or load from a context that provides it"
+            "Intel platform ID is unknown; pass --intel-platform-id or load from a context that provides it"
                 .to_string(),
         );
     } else {

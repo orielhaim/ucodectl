@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ucodectl.dev/schema/v1/manifest.json",
-  "title": "ucodectl Manifest",
+  "$id": "https://ucodectl.dev/schema/v1/catalog-manifest.json",
+  "title": "ucodectl catalog manifest",
   "type": "object",
   "required": ["manifest_version", "generator", "entries", "totals"],
   "properties": {

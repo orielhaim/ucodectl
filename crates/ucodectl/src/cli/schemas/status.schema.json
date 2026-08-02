@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ucodectl.dev/schema/v1/status.json",
+  "title": "ucodectl status",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "tool",
+    "os",
+    "environment",
+    "microcode_authority",
+    "overrides",
+    "sources",
+    "catalog",
+    "boot_artifact",
+    "processors",
+    "result"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "command": { "type": "string", "const": "status" },
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "const": "ucodectl" },
+        "version": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "os": { "type": "string" },
+    "kernel_release": { "type": ["string", "null"] },
+    "environment": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "environment_reason": { "type": "string" },
+    "microcode_authority": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "hypervisor_vendor": { "type": ["string", "null"], "pattern": "^[a-z0-9_]+$" },
+    "overrides": {
+      "type": "object",
+      "required": ["intel_platform_id", "scope"],
+      "properties": {
+        "intel_platform_id": { "type": ["integer", "null"], "minimum": 0, "maximum": 7 },
+        "scope": { "type": ["string", "null"], "const": "matching_diagnostics_only" }
+      },
+      "additionalProperties": false
+    },
+    "sources": { "$ref": "#/$defs/sources" },
+    "catalog": { "$ref": "#/$defs/catalog" },
+    "boot_artifact": { "$ref": "#/$defs/boot_artifact" },
+    "windows_microcode": {
+      "anyOf": [
+        { "$ref": "#/$defs/windows_microcode" },
+        { "type": "null" }
+      ]
+    },
+    "processors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/processor" }
+    },
+    "result": { "$ref": "#/$defs/result" }
+  },
+  "$defs": {
+    "sources": {
+      "type": "object",
+      "required": ["identity", "topology", "active_revision", "environment"],
+      "properties": {
+        "identity": { "type": "string" },
+        "topology": { "type": "string" },
+        "active_revision": { "type": "string" },
+        "environment": { "type": "string" }
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "required": ["state", "source_state", "patches", "matching_patches", "failures"],
+      "properties": {
+        "state": { "type": "string" },
+        "source_state": { "type": "string" },
+        "patches": { "type": ["integer", "null"], "minimum": 0 },
+        "matching_patches": { "type": ["integer", "null"], "minimum": 0 },
+        "failures": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "boot_artifact": {
+      "type": "object",
+      "required": ["state", "detail", "embedded_patches"],
+      "properties": {
+        "state": { "type": "string" },
+        "detail": { "type": "string" },
+        "embedded_patches": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "revision": {
+      "type": "object",
+      "required": ["state", "source", "scope", "confidence"],
+      "properties": {
+        "state": { "type": "string", "enum": ["known", "unavailable", "unsupported", "invalid"] },
+        "revision": { "type": "integer", "minimum": 0 },
+        "source": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "scope": { "type": "string", "enum": ["system", "processor_package", "core", "logical_processor", "virtual_cpu", "unknown"] },
+        "confidence": { "type": "string", "enum": ["authoritative", "reported", "inferred", "virtualized", "unverified"] },
+        "reason": { "type": "string" },
+        "raw": { "$ref": "#/$defs/raw" }
+      }
+    },
+    "raw": {
+      "type": "object",
+      "required": ["encoding", "hex", "bytes"],
+      "properties": {
+        "encoding": { "type": "string" },
+        "hex": { "type": "string", "pattern": "^[0-9a-f]*$" },
+        "bytes": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 } }
+      }
+    },
+    "windows_microcode": {
+      "type": "object",
+      "required": ["current_revision", "previous_revision", "registry_keys_observed", "logical_processor_count"],
+      "properties": {
+        "current_revision": { "anyOf": [{ "$ref": "#/$defs/revision" }, { "type": "null" }] },
+        "previous_revision": { "anyOf": [{ "$ref": "#/$defs/revision" }, { "type": "null" }] },
+        "registry_keys_observed": { "type": "integer", "minimum": 0 },
+        "logical_processor_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "processor": {
+      "type": "object",
+      "required": ["logical_processors", "logical_processor_count", "vendor", "signature", "family", "model", "stepping"],
+      "properties": {
+        "logical_processors": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+        "logical_processor_count": { "type": "integer", "minimum": 1 },
+        "vendor": { "type": "string" },
+        "brand": { "type": ["string", "null"] },
+        "signature": { "type": "string" },
+        "family": { "type": "integer", "minimum": 0 },
+        "model": { "type": "integer", "minimum": 0 },
+        "stepping": { "type": "integer", "minimum": 0 },
+        "platform_mask": { "type": ["string", "null"] },
+        "active_revision": { "$ref": "#/$defs/revision" },
+        "best_available_revision": { "type": ["string", "null"] },
+        "embedded_revision": { "type": ["string", "null"] },
+        "update_evaluation": {
+          "type": ["object", "null"],
+          "properties": {
+            "state": { "type": "string" },
+            "reason": { "type": "string" }
+          }
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": ["state", "reason"],
+      "properties": {
+        "state": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    }
+  }
+}

@@ -207,6 +207,56 @@ pub enum RevisionSource {
     Unavailable,
 }
 
+/// Scope of a hardware or operating-system observation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ObservationScope {
+    System,
+    ProcessorPackage,
+    Core,
+    LogicalProcessor,
+    VirtualCpu,
+    Unknown,
+}
+
+/// Confidence and authority level of an observation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ObservationConfidence {
+    Authoritative,
+    Reported,
+    Inferred,
+    Virtualized,
+    Unverified,
+}
+
+/// Self-describing raw bytes retained alongside a decoded observation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RawObservation {
+    pub encoding: String,
+    pub hex: String,
+    pub bytes: Vec<u8>,
+}
+
+impl RawObservation {
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        let encoding = match bytes.len() {
+            4 => "little_endian_u32",
+            8 => "little_endian_u32_at_offset_4",
+            _ => "raw_bytes",
+        };
+        let mut hex = String::with_capacity(bytes.len().saturating_mul(2));
+        for byte in &bytes {
+            hex.push_str(&alloc::format!("{byte:02x}"));
+        }
+        Self {
+            encoding: encoding.into(),
+            hex,
+            bytes,
+        }
+    }
+}
+
 /// A normalized active-microcode observation.  Unlike an `Option<u32>`, this
 /// preserves why a revision cannot be used for update policy.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -215,46 +265,140 @@ pub enum RevisionObservation {
     Known {
         revision: u32,
         source: RevisionSource,
+        scope: ObservationScope,
+        confidence: ObservationConfidence,
         #[serde(skip_serializing_if = "Option::is_none")]
-        raw_value: Option<Vec<u8>>,
+        raw: Option<RawObservation>,
     },
     Unavailable {
         source: RevisionSource,
+        scope: ObservationScope,
+        confidence: ObservationConfidence,
         reason: String,
     },
     Unsupported {
         source: RevisionSource,
+        scope: ObservationScope,
+        confidence: ObservationConfidence,
         reason: String,
     },
     Invalid {
         source: RevisionSource,
-        raw_value: Vec<u8>,
+        scope: ObservationScope,
+        confidence: ObservationConfidence,
+        raw: RawObservation,
         reason: String,
     },
 }
 
 impl RevisionObservation {
+    fn defaults(source: RevisionSource) -> (ObservationScope, ObservationConfidence) {
+        match source {
+            RevisionSource::LinuxSysfs => (
+                ObservationScope::LogicalProcessor,
+                ObservationConfidence::Authoritative,
+            ),
+            RevisionSource::ProcCpuinfo | RevisionSource::WindowsRegistry => (
+                ObservationScope::LogicalProcessor,
+                ObservationConfidence::Reported,
+            ),
+            RevisionSource::Manual => {
+                (ObservationScope::Unknown, ObservationConfidence::Unverified)
+            }
+            RevisionSource::Unavailable => {
+                (ObservationScope::Unknown, ObservationConfidence::Unverified)
+            }
+        }
+    }
+
     pub fn known(revision: u32, source: RevisionSource) -> Self {
+        let (scope, confidence) = Self::defaults(source);
         Self::Known {
             revision,
             source,
-            raw_value: None,
+            scope,
+            confidence,
+            raw: None,
         }
     }
 
     pub fn known_raw(revision: u32, source: RevisionSource, raw_value: Vec<u8>) -> Self {
+        let (scope, confidence) = Self::defaults(source);
         Self::Known {
             revision,
             source,
-            raw_value: Some(raw_value),
+            scope,
+            confidence,
+            raw: Some(RawObservation::from_bytes(raw_value)),
         }
     }
 
     pub fn unavailable(source: RevisionSource, reason: impl Into<alloc::string::String>) -> Self {
+        let (scope, confidence) = Self::defaults(source);
         Self::Unavailable {
             source,
+            scope,
+            confidence,
             reason: reason.into(),
         }
+    }
+
+    pub fn unsupported(source: RevisionSource, reason: impl Into<alloc::string::String>) -> Self {
+        let (scope, confidence) = Self::defaults(source);
+        Self::Unsupported {
+            source,
+            scope,
+            confidence,
+            reason: reason.into(),
+        }
+    }
+
+    pub fn invalid(
+        source: RevisionSource,
+        raw_value: Vec<u8>,
+        reason: impl Into<alloc::string::String>,
+    ) -> Self {
+        let (scope, confidence) = Self::defaults(source);
+        Self::Invalid {
+            source,
+            scope,
+            confidence,
+            raw: RawObservation::from_bytes(raw_value),
+            reason: reason.into(),
+        }
+    }
+
+    pub fn with_scope_confidence(
+        mut self,
+        scope: ObservationScope,
+        confidence: ObservationConfidence,
+    ) -> Self {
+        match &mut self {
+            Self::Known {
+                scope: current_scope,
+                confidence: current_confidence,
+                ..
+            }
+            | Self::Unavailable {
+                scope: current_scope,
+                confidence: current_confidence,
+                ..
+            }
+            | Self::Unsupported {
+                scope: current_scope,
+                confidence: current_confidence,
+                ..
+            }
+            | Self::Invalid {
+                scope: current_scope,
+                confidence: current_confidence,
+                ..
+            } => {
+                *current_scope = scope;
+                *current_confidence = confidence;
+            }
+        }
+        self
     }
 
     pub fn known_revision(&self) -> Option<u32> {
@@ -270,6 +414,56 @@ impl RevisionObservation {
             | Self::Unavailable { source, .. }
             | Self::Unsupported { source, .. }
             | Self::Invalid { source, .. } => *source,
+        }
+    }
+
+    pub fn scope(&self) -> ObservationScope {
+        match self {
+            Self::Known { scope, .. }
+            | Self::Unavailable { scope, .. }
+            | Self::Unsupported { scope, .. }
+            | Self::Invalid { scope, .. } => *scope,
+        }
+    }
+
+    pub fn confidence(&self) -> ObservationConfidence {
+        match self {
+            Self::Known { confidence, .. }
+            | Self::Unavailable { confidence, .. }
+            | Self::Unsupported { confidence, .. }
+            | Self::Invalid { confidence, .. } => *confidence,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::vec;
+
+    #[test]
+    fn raw_revision_observation_is_self_describing() {
+        let observation = RevisionObservation::known_raw(
+            0x1234,
+            RevisionSource::WindowsRegistry,
+            vec![0x34, 0x12, 0, 0],
+        );
+        assert!(matches!(
+            &observation,
+            RevisionObservation::Known { raw: Some(_), .. }
+        ));
+        if let RevisionObservation::Known {
+            scope,
+            confidence,
+            raw: Some(raw),
+            ..
+        } = observation
+        {
+            assert_eq!(scope, ObservationScope::LogicalProcessor);
+            assert_eq!(confidence, ObservationConfidence::Reported);
+            assert_eq!(raw.encoding, "little_endian_u32");
+            assert_eq!(raw.hex, "34120000");
+            assert_eq!(raw.bytes, vec![0x34, 0x12, 0, 0]);
         }
     }
 }

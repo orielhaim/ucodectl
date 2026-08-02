@@ -1,6 +1,6 @@
 use miette::Result;
 use serde::Serialize;
-use ucode_core::Vendor;
+use ucode_core::{CpuSignature, Vendor};
 
 use super::{ListArgs, OutputFormat};
 use crate::output::emit;
@@ -8,6 +8,8 @@ use crate::util::{default_limits, load_catalog};
 
 #[derive(Serialize)]
 struct ListJson {
+    schema_version: u32,
+    command: &'static str,
     patches: Vec<Row>,
     count: usize,
 }
@@ -27,13 +29,19 @@ struct Row {
 pub fn run(args: ListArgs, format: OutputFormat) -> Result<i32> {
     let catalog = load_catalog(&args.paths, default_limits(), false)?;
     let vendor_filter: Option<Vendor> = args.vendor.map(Into::into);
+    let signature_filter = args.signature.map(CpuSignature);
 
     let mut rows = Vec::new();
     for p in &catalog.patches {
-        if let Some(v) = vendor_filter {
-            if p.vendor != v {
-                continue;
-            }
+        if let Some(v) = vendor_filter
+            && p.vendor != v
+        {
+            continue;
+        }
+        if let Some(signature) = signature_filter
+            && !p.matches.iter().any(|m| m.signature == signature)
+        {
+            continue;
         }
         let primary = p.primary_match();
         rows.push(Row {
@@ -50,7 +58,22 @@ pub fn run(args: ListArgs, format: OutputFormat) -> Result<i32> {
         });
     }
 
+    if args.latest_only {
+        rows.sort_by(|a, b| {
+            a.vendor
+                .cmp(&b.vendor)
+                .then_with(|| a.signature.cmp(&b.signature))
+                .then_with(|| a.platform_mask.cmp(&b.platform_mask))
+                .then_with(|| b.revision.cmp(&a.revision))
+        });
+        rows.dedup_by(|a, b| {
+            a.vendor == b.vendor && a.signature == b.signature && a.platform_mask == b.platform_mask
+        });
+    }
+
     let json = ListJson {
+        schema_version: 1,
+        command: "list",
         count: rows.len(),
         patches: rows,
     };

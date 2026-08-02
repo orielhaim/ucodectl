@@ -24,14 +24,23 @@ pub struct HostCpu {
     pub brand: Option<String>,
     /// Active microcode observation with source and availability semantics.
     pub revision: RevisionObservation,
-    /// Windows `Previous Update Revision`, when exposed; diagnostic only.
+}
+
+/// Windows registry metadata whose scope is the system rather than one CPU.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WindowsMicrocodeMetadata {
+    pub current_revision: Option<RevisionObservation>,
     pub previous_revision: Option<RevisionObservation>,
+    /// Number of processor registry keys that exposed `Previous Update Revision`.
+    pub registry_keys_observed: usize,
+    pub logical_processor_count: usize,
 }
 
 /// Aggregate system view used by status / plan / match.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemState {
     pub cpus: Vec<HostCpu>,
+    pub windows_microcode: Option<WindowsMicrocodeMetadata>,
     /// Distinct CPU identities across the system (signature + platform).
     pub unique_identities: Vec<CpuIdentity>,
     pub mixed_signature: bool,
@@ -80,13 +89,13 @@ pub fn discover_system() -> Result<SystemState> {
         }
     }
 
-    discover_from_cpuid().or_else(|e| {
+    discover_from_cpuid().map_err(|e| {
         debug!(error = %e, "cpuid discovery unavailable");
-        Err(if cfg!(target_os = "linux") {
+        if cfg!(target_os = "linux") {
             e
         } else {
             LinuxError::NotLinux("CPU discovery requires /proc/cpuinfo or x86 CPUID")
-        })
+        }
     })
 }
 
@@ -104,8 +113,8 @@ pub fn system_from_identity(identity: CpuIdentity) -> SystemState {
                 RevisionSource::Manual,
                 "manual identity does not include an active microcode revision",
             ),
-            previous_revision: None,
         }],
+        windows_microcode: None,
         unique_identities: vec![identity],
         mixed_signature: false,
         mixed_revision: false,
@@ -149,7 +158,6 @@ fn discover_from_proc() -> Result<SystemState> {
             core_id: info.core_id,
             brand: None,
             revision,
-            previous_revision: None,
         });
     }
 
@@ -160,7 +168,7 @@ fn discover_from_proc() -> Result<SystemState> {
         }
     }
 
-    Ok(finalise(cpus, "proc".to_string()))
+    Ok(finalise(cpus, "proc".to_string(), None))
 }
 
 fn discover_from_cpuid() -> Result<SystemState> {
@@ -205,18 +213,26 @@ fn discover_from_cpuid() -> Result<SystemState> {
         #[cfg(not(windows))]
         let count = 1;
         let mut cpus = Vec::with_capacity(count);
+        #[cfg(windows)]
+        let system_revision = ucode_windows::update_revision(0).with_scope_confidence(
+            ucode_core::ObservationScope::System,
+            ucode_core::ObservationConfidence::Reported,
+        );
+        #[cfg(windows)]
+        let system_previous_revision = ucode_windows::previous_update_revision(0).map(|value| {
+            value.with_scope_confidence(
+                ucode_core::ObservationScope::System,
+                ucode_core::ObservationConfidence::Reported,
+            )
+        });
         for processor in 0..count as u32 {
             #[cfg(windows)]
-            let revision = ucode_windows::update_revision(processor);
-            #[cfg(windows)]
-            let previous_revision = ucode_windows::previous_update_revision(processor);
+            let revision = system_revision.clone();
             #[cfg(not(windows))]
             let revision = RevisionObservation::unavailable(
                 RevisionSource::Unavailable,
                 "no active microcode revision source is available off Linux/Windows",
             );
-            #[cfg(not(windows))]
-            let previous_revision = None;
             let mut cpu_identity = identity.clone();
             cpu_identity.current_revision = revision.known_revision();
             cpus.push(HostCpu {
@@ -227,10 +243,18 @@ fn discover_from_cpuid() -> Result<SystemState> {
                 core_id: None,
                 brand: brand.clone(),
                 revision,
-                previous_revision,
             });
         }
-        return Ok(finalise(cpus, "cpuid".to_string()));
+        #[cfg(windows)]
+        let windows_microcode = Some(WindowsMicrocodeMetadata {
+            current_revision: Some(system_revision),
+            previous_revision: system_previous_revision,
+            registry_keys_observed: 1,
+            logical_processor_count: count,
+        });
+        #[cfg(not(windows))]
+        let windows_microcode = None;
+        Ok(finalise(cpus, "cpuid".to_string(), windows_microcode))
     }
     #[cfg(not(any(target_arch = "x86_64", target_arch = "x86")))]
     {
@@ -242,10 +266,10 @@ fn cpuid_brand_string() -> Option<String> {
     #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
     {
         use raw_cpuid::CpuId;
-        return CpuId::new()
+        CpuId::new()
             .get_processor_brand_string()
             .map(|b| b.as_str().trim().to_string())
-            .filter(|s| !s.is_empty());
+            .filter(|s| !s.is_empty())
     }
     #[cfg(not(any(target_arch = "x86_64", target_arch = "x86")))]
     {
@@ -253,7 +277,11 @@ fn cpuid_brand_string() -> Option<String> {
     }
 }
 
-fn finalise(cpus: Vec<HostCpu>, source: String) -> SystemState {
+fn finalise(
+    cpus: Vec<HostCpu>,
+    source: String,
+    windows_microcode: Option<WindowsMicrocodeMetadata>,
+) -> SystemState {
     let mut sigs: BTreeSet<(Vendor, u32)> = BTreeSet::new();
     let mut revs: BTreeSet<u32> = BTreeSet::new();
     let mut unique: Vec<CpuIdentity> = Vec::new();
@@ -294,6 +322,7 @@ fn finalise(cpus: Vec<HostCpu>, source: String) -> SystemState {
         has_offline_cpus: has_offline,
         source,
         os: std::env::consts::OS.to_string(),
+        windows_microcode,
         cpus,
     }
 }
@@ -309,21 +338,6 @@ fn revision_from_proc(value: Option<u32>) -> RevisionObservation {
             RevisionSource::ProcCpuinfo,
             "/proc/cpuinfo does not report a microcode revision",
         ),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn proc_sentinel_is_not_a_revision() {
-        let observation = revision_from_proc(Some(u32::MAX));
-        assert_eq!(observation.known_revision(), None);
-        assert!(matches!(
-            observation,
-            RevisionObservation::Unavailable { .. }
-        ));
     }
 }
 
@@ -344,10 +358,9 @@ pub fn system_from_cpuinfo_text(text: &str) -> Result<SystemState> {
             core_id: info.core_id,
             brand: None,
             revision: revision_from_proc(info.microcode),
-            previous_revision: None,
         })
         .collect();
-    Ok(finalise(cpus, "cpuinfo-text".to_string()))
+    Ok(finalise(cpus, "cpuinfo-text".to_string(), None))
 }
 
 /// Attach a platform mask to every Intel CPU that lacks one.
@@ -363,4 +376,19 @@ pub fn with_platform_mask(mut state: SystemState, mask: PlatformMask) -> SystemS
         }
     }
     state
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proc_sentinel_is_not_a_revision() {
+        let observation = revision_from_proc(Some(u32::MAX));
+        assert_eq!(observation.known_revision(), None);
+        assert!(matches!(
+            observation,
+            RevisionObservation::Unavailable { .. }
+        ));
+    }
 }

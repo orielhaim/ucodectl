@@ -8,11 +8,11 @@ use crate::header::PATCH_HEADER_SIZE;
 /// return `None` and are only size-checked against the global limit.
 pub fn max_patch_size_for_family(family: u32) -> Option<u32> {
     match family {
-        0x10 | 0x11 | 0x12 | 0x13 => Some(2048),
+        0x10..=0x13 => Some(2048),
         0x14 => Some(1824),
         0x15 => Some(4096),
         0x16 => Some(3458),
-        0x17 | 0x18 => Some(3200),
+        0x17..=0x18 => Some(3200),
         0x19 => Some(5568),
         // Zen 5 and later ship substantially larger patches (observed 14368
         // bytes on family 0x1a). No published constant, so use a generous

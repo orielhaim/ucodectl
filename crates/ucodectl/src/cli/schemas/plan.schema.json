@@ -1,24 +1,53 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ucodectl.dev/schema/v1/plan.json",
-  "title": "ucodectl Plan",
+  "title": "ucodectl immutable plan artifact",
   "type": "object",
-  "required": [
-    "plan_version",
-    "overall_status",
-    "action",
-    "cpus",
-    "writes",
-    "messages",
-    "would_change"
-  ],
+  "required": ["schema_version", "command", "plan_id", "created_unix", "inputs", "target", "actions", "preconditions", "plan"],
   "properties": {
-    "plan_version": { "type": "integer", "const": 1 },
-    "overall_status": { "type": "string" },
-    "action": { "type": "string" },
-    "cpus": { "type": "array", "items": { "type": "object" } },
-    "writes": { "type": "array", "items": { "type": "object" } },
-    "messages": { "type": "array", "items": { "type": "string" } },
-    "would_change": { "type": "boolean" }
-  }
+    "schema_version": { "type": "integer", "const": 1 },
+    "command": { "type": "string", "const": "plan" },
+    "plan_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "created_unix": { "type": "integer", "minimum": 0 },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "follow_symlinks"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "follow_symlinks": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": ["identities", "os", "virtualization"],
+      "properties": {
+        "identities": { "type": "array", "items": { "type": "object" } },
+        "os": { "type": "string" },
+        "virtualization": { "type": "string", "pattern": "^[a-z0-9_]+$" }
+      },
+      "additionalProperties": false
+    },
+    "actions": { "type": "array", "items": { "type": "string" } },
+    "preconditions": { "type": "array", "items": { "type": "string" } },
+    "plan": {
+      "type": "object",
+      "required": ["plan_version", "overall_status", "action", "cpus", "writes", "messages", "would_change"],
+      "properties": {
+        "plan_version": { "type": "integer", "const": 1 },
+        "overall_status": { "type": "string" },
+        "action": { "type": "string" },
+        "cpus": { "type": "array", "items": { "type": "object" } },
+        "writes": { "type": "array", "items": { "type": "object" } },
+        "messages": { "type": "array", "items": { "type": "string" } },
+        "would_change": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
 }

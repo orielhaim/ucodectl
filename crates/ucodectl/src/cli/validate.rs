@@ -4,10 +4,12 @@ use ucode_core::Severity;
 
 use super::{OutputFormat, ValidateArgs};
 use crate::output::emit;
-use crate::util::{default_limits, load_catalog};
+use crate::util::{default_limits, load_catalog_named};
 
 #[derive(Serialize)]
 struct ValidateJson {
+    schema_version: u32,
+    command: &'static str,
     ok: bool,
     errors: usize,
     warnings: usize,
@@ -26,7 +28,13 @@ struct FindingJson {
 }
 
 pub fn run(args: ValidateArgs, format: OutputFormat) -> Result<i32> {
-    let catalog = load_catalog(&args.paths, default_limits(), false)?;
+    let catalog = load_catalog_named(
+        "validate: failed to load validation source",
+        &args.paths,
+        default_limits(),
+        false,
+        true,
+    )?;
     let errors = catalog.report.count(Severity::Error);
     let warnings = catalog.report.count(Severity::Warning);
     let infos = catalog.report.count(Severity::Info);
@@ -44,8 +52,10 @@ pub fn run(args: ValidateArgs, format: OutputFormat) -> Result<i32> {
         })
         .collect();
 
-    let ok = errors == 0 && (!args.strict || warnings == 0);
+    let ok = errors == 0 && (!args.warnings_as_errors || warnings == 0);
     let json = ValidateJson {
+        schema_version: 1,
+        command: "validate",
         ok,
         errors,
         warnings,

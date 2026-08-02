@@ -14,6 +14,44 @@ use ucode_core::limits::Limits;
 
 use crate::{BootError, Result};
 
+/// Cheap, bounded PE/COFF probe used by the CLI's automatic boot-artifact
+/// detection. It intentionally does not claim that every PE is a UKI; the
+/// section table must contain at least one known UKI payload section.
+pub fn looks_like_uki(bytes: &[u8]) -> bool {
+    if bytes.len() < 0x40 || &bytes[..2] != b"MZ" {
+        return false;
+    }
+    let pe_offset =
+        u32::from_le_bytes([bytes[0x3c], bytes[0x3d], bytes[0x3e], bytes[0x3f]]) as usize;
+    if pe_offset.checked_add(24).is_none()
+        || bytes.len() < pe_offset + 24
+        || &bytes[pe_offset..pe_offset + 4] != b"PE\0\0"
+    {
+        return false;
+    }
+    let section_count = u16::from_le_bytes([bytes[pe_offset + 6], bytes[pe_offset + 7]]) as usize;
+    let optional_size = u16::from_le_bytes([bytes[pe_offset + 20], bytes[pe_offset + 21]]) as usize;
+    let section_table = match (pe_offset + 24).checked_add(optional_size) {
+        Some(offset) => offset,
+        None => return false,
+    };
+    if section_count == 0 || section_count > 96 || section_table > bytes.len() {
+        return false;
+    }
+    let table_size = match section_count.checked_mul(40) {
+        Some(size) => size,
+        None => return false,
+    };
+    if section_table + table_size > bytes.len() {
+        return false;
+    }
+    (0..section_count).any(|i| {
+        let start = section_table + i * 40;
+        let name = &bytes[start..start + 8];
+        name.starts_with(b".linux") || name.starts_with(b".initrd") || name.starts_with(b".ucode")
+    })
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UkiSectionInfo {
     pub name: String,
@@ -68,10 +106,10 @@ pub fn inspect_uki_bytes(
             h.update(d);
             h.finalize().iter().map(|b| format!("{b:02x}")).collect()
         });
-        if name == ".ucode" {
-            if let Some(d) = data {
-                ucode_data = Some(d.to_vec());
-            }
+        if name == ".ucode"
+            && let Some(d) = data
+        {
+            ucode_data = Some(d.to_vec());
         }
         sections.push(UkiSectionInfo { name, size, sha256 });
     }

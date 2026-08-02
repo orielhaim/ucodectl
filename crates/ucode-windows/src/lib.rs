@@ -73,13 +73,11 @@ mod registry {
                 );
             }
             if kind != REG_BINARY {
-                return RevisionObservation::Invalid {
-                    source: RevisionSource::WindowsRegistry,
-                    raw_value: Vec::new(),
-                    reason: format!(
-                        "Update Revision has registry type {kind}, expected REG_BINARY"
-                    ),
-                };
+                return RevisionObservation::invalid(
+                    RevisionSource::WindowsRegistry,
+                    Vec::new(),
+                    format!("Update Revision has registry type {kind}, expected REG_BINARY"),
+                );
             }
             let mut bytes = vec![0u8; len as usize];
             let second = unsafe {
@@ -127,11 +125,11 @@ mod registry {
             4 => bytes[..4].try_into().expect("fixed-length slice"),
             8 => bytes[4..8].try_into().expect("fixed-length slice"),
             _ => {
-                return RevisionObservation::Invalid {
-                    source: RevisionSource::WindowsRegistry,
-                    raw_value: bytes,
-                    reason: "Update Revision has an unrecognized REG_BINARY length; expected 4 or 8 bytes".to_string(),
-                };
+                return RevisionObservation::invalid(
+                    RevisionSource::WindowsRegistry,
+                    bytes,
+                    "Update Revision has an unrecognized REG_BINARY length; expected 4 or 8 bytes",
+                );
             }
         };
         let revision = u32::from_le_bytes(revision_bytes);
@@ -143,15 +141,15 @@ mod registry {
 pub fn update_revision(cpu: u32) -> RevisionObservation {
     #[cfg(windows)]
     {
-        return registry::update_revision(cpu);
+        registry::update_revision(cpu)
     }
     #[cfg(not(windows))]
     {
         let _ = cpu;
-        RevisionObservation::Unsupported {
-            source: RevisionSource::WindowsRegistry,
-            reason: "Windows registry is unavailable on this OS".to_string(),
-        }
+        RevisionObservation::unsupported(
+            RevisionSource::WindowsRegistry,
+            "Windows registry is unavailable on this OS",
+        )
     }
 }
 
@@ -160,7 +158,7 @@ pub fn update_revision(cpu: u32) -> RevisionObservation {
 pub fn previous_update_revision(cpu: u32) -> Option<RevisionObservation> {
     #[cfg(windows)]
     {
-        return registry::previous_update_revision(cpu);
+        registry::previous_update_revision(cpu)
     }
     #[cfg(not(windows))]
     {

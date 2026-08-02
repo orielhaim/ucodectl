@@ -112,10 +112,10 @@ pub fn extract_embedded_microcode(bytes: &[u8], limits: &Limits) -> Result<Vec<(
     };
     let mut out = Vec::new();
     for entry in &scan.entries {
-        if is_microcode_path(&entry.name) {
-            if let Some(data) = entry.data(bytes) {
-                out.push((entry.name.clone(), data.to_vec()));
-            }
+        if is_microcode_path(&entry.name)
+            && let Some(data) = entry.data(bytes)
+        {
+            out.push((entry.name.clone(), data.to_vec()));
         }
     }
     Ok(out)

@@ -75,7 +75,7 @@ pub fn validate_entry(
             format!("total size {total} is below the {MIN_UPDATE_SIZE}-byte minimum"),
         ));
     }
-    if total % 1024 != 0 {
+    if !total.is_multiple_of(1024) {
         r.push(
             Finding::new(
                 FindingCode::TotalSizeNotAligned,
@@ -89,7 +89,7 @@ pub fn validate_entry(
             }),
         );
     }
-    if data % 4 != 0 {
+    if !data.is_multiple_of(4) {
         r.push(Finding::new(
             FindingCode::BadDataSize,
             base + 0x1c,

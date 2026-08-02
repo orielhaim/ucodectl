@@ -1,0 +1,429 @@
+{
+  "$defs": {
+    "boot_artifact": {
+      "properties": {
+        "detail": {
+          "type": "string"
+        },
+        "embedded_patches": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "detail",
+        "embedded_patches"
+      ],
+      "type": "object"
+    },
+    "catalog": {
+      "properties": {
+        "failures": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "matching_patches": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "patches": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "source_state": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "source_state",
+        "patches",
+        "matching_patches",
+        "failures"
+      ],
+      "type": "object"
+    },
+    "processor": {
+      "properties": {
+        "active_revision": {
+          "$ref": "#/$defs/revision"
+        },
+        "best_available_revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "brand": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "embedded_revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "family": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "logical_processor_count": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "logical_processors": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "model": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "platform_mask": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signature": {
+          "type": "string"
+        },
+        "stepping": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "update_evaluation": {
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "vendor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_processors",
+        "logical_processor_count",
+        "vendor",
+        "signature",
+        "family",
+        "model",
+        "stepping"
+      ],
+      "type": "object"
+    },
+    "raw": {
+      "properties": {
+        "bytes": {
+          "items": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "encoding": {
+          "type": "string"
+        },
+        "hex": {
+          "pattern": "^[0-9a-f]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "encoding",
+        "hex",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "revision": {
+      "properties": {
+        "confidence": {
+          "enum": [
+            "authoritative",
+            "reported",
+            "inferred",
+            "virtualized",
+            "unverified"
+          ],
+          "type": "string"
+        },
+        "raw": {
+          "$ref": "#/$defs/raw"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope": {
+          "enum": [
+            "system",
+            "processor_package",
+            "core",
+            "logical_processor",
+            "virtual_cpu",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "source": {
+          "pattern": "^[a-z0-9_]+$",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "known",
+            "unavailable",
+            "unsupported",
+            "invalid"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "source",
+        "scope",
+        "confidence"
+      ],
+      "type": "object"
+    },
+    "sources": {
+      "properties": {
+        "active_revision": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "string"
+        },
+        "identity": {
+          "type": "string"
+        },
+        "topology": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "identity",
+        "topology",
+        "active_revision",
+        "environment"
+      ],
+      "type": "object"
+    },
+    "windows_microcode": {
+      "properties": {
+        "current_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/revision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logical_processor_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "previous_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/revision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "registry_keys_observed": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "current_revision",
+        "previous_revision",
+        "registry_keys_observed",
+        "logical_processor_count"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://ucodectl.dev/schema/v1/status.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "boot_artifact": {
+      "$ref": "#/$defs/boot_artifact"
+    },
+    "catalog": {
+      "$ref": "#/$defs/catalog"
+    },
+    "command": {
+      "const": "status",
+      "type": "string"
+    },
+    "environment": {
+      "pattern": "^[a-z0-9_]+$",
+      "type": "string"
+    },
+    "environment_reason": {
+      "type": "string"
+    },
+    "hypervisor_vendor": {
+      "pattern": "^[a-z0-9_]+$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "kernel_release": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "microcode_authority": {
+      "pattern": "^[a-z0-9_]+$",
+      "type": "string"
+    },
+    "os": {
+      "type": "string"
+    },
+    "overrides": {
+      "additionalProperties": false,
+      "properties": {
+        "intel_platform_id": {
+          "maximum": 7,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "scope": {
+          "const": "matching_diagnostics_only",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "intel_platform_id",
+        "scope"
+      ],
+      "type": "object"
+    },
+    "processors": {
+      "items": {
+        "$ref": "#/$defs/processor"
+      },
+      "type": "array"
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "sources": {
+      "$ref": "#/$defs/sources"
+    },
+    "tool": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "const": "ucodectl",
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "windows_microcode": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/windows_microcode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "command",
+    "tool",
+    "os",
+    "environment",
+    "microcode_authority",
+    "overrides",
+    "sources",
+    "catalog",
+    "boot_artifact",
+    "processors",
+    "result"
+  ],
+  "title": "ucodectl status",
+  "type": "object"
+}

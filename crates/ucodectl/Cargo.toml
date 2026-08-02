@@ -1,7 +1,7 @@
 # crates/ucodectl/Cargo.toml
 [package]
 name = "ucodectl"
-description = "Inspect, validate, build and verify CPU microcode for Linux"
+description = "Inspect, validate and manage CPU microcode"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

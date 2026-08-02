@@ -232,7 +232,7 @@ impl AmdContainer {
                 have: bytes.len().saturating_sub(table_start),
             });
         }
-        if table_len as usize % EQUIV_ENTRY_SIZE != 0 {
+        if !(table_len as usize).is_multiple_of(EQUIV_ENTRY_SIZE) {
             report.push(Finding::new(
                 FindingCode::BadTotalSize,
                 start as u64 + 8,

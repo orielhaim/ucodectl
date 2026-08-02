@@ -4,12 +4,13 @@ use ucode_core::limits::Limits;
 use ucode_policy::{PlanInput, evaluate};
 
 use super::{OutputFormat, PlanArgs};
+use crate::cli::plan_artifact::PlanArtifact;
 use crate::output::{emit, hex_opt};
-use crate::util::{default_limits, load_catalog, resolve_system};
+use crate::util::{default_limits, load_catalog_with_options, resolve_system};
 
 pub fn run(args: PlanArgs, format: OutputFormat) -> Result<i32> {
-    let system = resolve_system(None, None, args.platform_id, None)?;
-    let available = load_catalog(&args.paths, default_limits(), true)?;
+    let system = resolve_system(None, None, args.intel_platform_id, None)?;
+    let available = load_catalog_with_options(&args.paths, default_limits(), true, false)?;
     let limits = Limits::default();
     let embedded_insp = if let Some(boot) = &args.boot {
         Some(inspect_initrd(boot, &limits).map_err(|e| miette::miette!("{e}"))?)
@@ -17,16 +18,38 @@ pub fn run(args: PlanArgs, format: OutputFormat) -> Result<i32> {
         None
     };
 
+    let early_output = if args.early_output.is_absolute() {
+        args.early_output.clone()
+    } else {
+        std::env::current_dir()
+            .map_err(|e| miette::miette!("resolve plan output: {e}"))?
+            .join(&args.early_output)
+    };
     let plan = evaluate(&PlanInput {
         system: &system,
         available: &available,
         embedded: embedded_insp.as_ref().map(|i| &i.catalog),
-        allow_downgrade: args.allow_downgrade,
-        want_early_image: args.want_early,
-        early_output: Some(args.early_output.display().to_string()),
+        allow_downgrade: args.consider_downgrade,
+        want_early_image: !matches!(args.deployment, super::DeploymentMode::None),
+        early_output: Some(early_output.display().to_string()),
     });
 
-    emit(format, &plan, || {
+    let artifact = PlanArtifact::create(
+        plan.clone(),
+        &args.paths,
+        system.unique_identities.clone(),
+        system.os.clone(),
+        serde_json::to_value(system.virtualization)
+            .ok()
+            .and_then(|value| value.as_str().map(str::to_string))
+            .unwrap_or_else(|| "unknown".to_string()),
+        false,
+    )?;
+    if let Some(path) = &args.output_plan {
+        artifact.write_to(path)?;
+    }
+
+    emit(format, &artifact, || {
         let mut out = String::new();
         out.push_str(&format!(
             "plan v{}  status={}  action={:?}  would_change={}\n",
@@ -54,6 +77,10 @@ pub fn run(args: PlanArgs, format: OutputFormat) -> Result<i32> {
         }
         for m in &plan.messages {
             out.push_str(&format!("  note: {m}\n"));
+        }
+        out.push_str(&format!("  plan id: {}\n", artifact.plan_id));
+        if let Some(path) = &args.output_plan {
+            out.push_str(&format!("  plan artifact: {}\n", path.display()));
         }
         out
     });

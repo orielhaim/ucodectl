@@ -196,10 +196,10 @@ fn is_container() -> bool {
             return true;
         }
     }
-    if let Ok(env) = std::env::var("container") {
-        if !env.is_empty() {
-            return true;
-        }
+    if let Ok(env) = std::env::var("container")
+        && !env.is_empty()
+    {
+        return true;
     }
     false
 }
@@ -370,12 +370,12 @@ fn hypervisor_probe() -> HvProbe {
             None => (false, false),
         };
 
-        return HvProbe {
+        HvProbe {
             bit: true,
             vendor_label,
             hyperv_root,
             is_guest_vendor,
-        };
+        }
     }
     #[cfg(not(any(target_arch = "x86_64", target_arch = "x86")))]
     {

@@ -30,6 +30,8 @@ pub struct IngestOptions {
     pub tolerate_failures: bool,
     /// Restrict ingestion to one vendor.
     pub only_vendor: Option<Vendor>,
+    /// Permit directory and file symlinks to be resolved.
+    pub follow_symlinks: bool,
 }
 
 impl Default for IngestOptions {
@@ -41,6 +43,7 @@ impl Default for IngestOptions {
             recursive: true,
             tolerate_failures: true,
             only_vendor: None,
+            follow_symlinks: true,
         }
     }
 }
@@ -92,9 +95,13 @@ fn ingest_inner(
     })?;
 
     if meta.file_type().is_symlink() {
+        if !opts.follow_symlinks {
+            return Err(CatalogError::Symlink {
+                path: path.to_path_buf(),
+            });
+        }
         // Symlinks inside a release tree are common (e.g. distro packaging),
-        // but silently following them makes provenance meaningless. Resolve
-        // explicitly and record the real path.
+        // but following them is always an explicit caller policy.
         let target = std::fs::canonicalize(path).map_err(|e| CatalogError::Io {
             path: path.to_path_buf(),
             source: e,
@@ -177,7 +184,7 @@ fn read_file_nofollow(path: &Path, max: u64) -> Result<Vec<u8>> {
                 path: path.to_path_buf(),
                 source: e,
             })?;
-        return Ok(buf);
+        Ok(buf)
     }
 
     #[cfg(not(all(unix, not(target_os = "windows"))))]

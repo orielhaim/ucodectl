@@ -1,6 +1,6 @@
 # Ucodectl
 
-**Inspect, validate, build and verify CPU microcode for Linux.**
+**Inspect, validate and manage CPU microcode.**
 
 `ucodectl` is a modern, vendor-neutral toolkit for Intel and AMD microcode:
 parse bundles/containers, compare releases, inspect early boot images, build
@@ -41,11 +41,12 @@ ucodectl inspect /lib/firmware/intel-ucode
 ucodectl list /lib/firmware/amd-ucode --format json
 
 # Validate structure (checksums, sizes, tables)
-ucodectl validate /path/to/microcode.bin --strict
+ucodectl validate /path/to/microcode.bin --warnings-as-errors
 
 # Match patches to this machine (or an explicit signature)
-ucodectl match /lib/firmware/intel-ucode --platform-id 7
-ucodectl match ./blobs --signature 0x000806c1 --vendor intel --platform-id 7
+ucodectl match /lib/firmware/intel-ucode --intel-platform-id 7
+ucodectl match ./blobs --signature 0x000806c1 --vendor intel --intel-platform-id 7 \
+  --active-revision 0x000000b4
 
 # Diff two releases
 ucodectl diff /old/intel-ucode /new/intel-ucode
@@ -56,15 +57,17 @@ ucodectl build-early /lib/firmware/intel-ucode /lib/firmware/amd-ucode \
 
 # Inspect what is already embedded in an initrd / UKI
 ucodectl inspect-boot /boot/initrd.img-$(uname -r)
-ucodectl inspect-boot /boot/efi/EFI/Linux/linux.efi --uki
+ucodectl inspect-boot /boot/efi/EFI/Linux/linux.efi --type auto
 
-# Plan then apply (apply is explicit and dry-runnable)
-ucodectl plan /lib/firmware/intel-ucode --boot /boot/initrd.img
-ucodectl apply /lib/firmware/intel-ucode --dry-run
-ucodectl apply /lib/firmware/intel-ucode --yes --early-output ucode-early.cpio
+# Plan then apply an immutable artifact (apply never re-plans sources)
+ucodectl plan /lib/firmware/intel-ucode --boot /boot/initrd.img \
+  --output-plan /var/lib/ucodectl/plan.json
+ucodectl apply /var/lib/ucodectl/plan.json --dry-run
+ucodectl apply /var/lib/ucodectl/plan.json --confirm <PLAN_ID>
 
 # Post-reboot check
-ucodectl verify --expect-revision 0x000000b4
+ucodectl verify /var/lib/ucodectl/plan.json
+ucodectl verify --transaction <TRANSACTION_ID>
 
 # Status uses grouped logical processors by default. Add provenance / raw
 # observations for diagnostics, or expand every logical processor.
@@ -72,19 +75,26 @@ ucodectl status --verbose --raw
 ucodectl status --per-cpu
 
 # Packaging helpers
-ucodectl schema
+ucodectl schema status
+ucodectl schema all --out-dir schemas/
 ucodectl completions bash
 ucodectl manpages --out-dir man/
 ```
 
 Stdout is reserved for command results; diagnostics go to stderr.
-Every command accepts `--format json`.
+Data-producing commands accept `--format json`; schema, completion, and
+manpage commands write their native artifacts directly.
 
 `status` distinguishes a missing catalog from a catalog with zero matching
 patches, and reports the execution environment separately from microcode
-authority. On Windows it reads the active revision from the read-only
-`Update Revision` registry value; on WSL2 it reports the revision as
-host-managed rather than treating the guest sentinel value as a revision.
+authority. Its versioned JSON output includes observation scope and
+confidence, self-describing raw registry bytes, and Windows metadata at the
+correct system scope. On Windows the registry revision is a system-level
+observation and is not duplicated as a per-logical-processor measurement;
+`Previous Update Revision` is kept as system metadata with the number of keys
+that exposed it. On WSL2 it reports
+the revision as host-managed rather than treating the guest sentinel value as
+a revision.
 
 ## Design principles
 

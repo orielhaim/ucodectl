@@ -15,8 +15,8 @@ pub mod virt;
 
 pub use cpuinfo::{CpuInfoCpu, parse_cpuinfo};
 pub use discover::{
-    HostCpu, SystemState, discover_system, system_from_cpuinfo_text, system_from_identity,
-    with_platform_mask,
+    HostCpu, SystemState, WindowsMicrocodeMetadata, discover_system, system_from_cpuinfo_text,
+    system_from_identity, with_platform_mask,
 };
 pub use firmware::{FirmwareTree, probe_firmware_tree};
 pub use paths::{default_firmware_paths, default_initrd_candidates};

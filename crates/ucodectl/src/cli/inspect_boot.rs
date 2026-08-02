@@ -1,13 +1,15 @@
 use miette::Result;
 use serde::Serialize;
-use ucode_boot::{inspect_initrd, inspect_uki};
+use ucode_boot::{inspect_initrd, inspect_uki, looks_like_uki};
 use ucode_core::limits::Limits;
 
-use super::{InspectBootArgs, OutputFormat};
+use super::{BootInputType, InspectBootArgs, OutputFormat};
 use crate::output::emit;
 
 #[derive(Serialize)]
 struct BootJson {
+    schema_version: u32,
+    command: &'static str,
     kind: String,
     path: String,
     file_size: u64,
@@ -19,17 +21,24 @@ struct BootJson {
 
 pub fn run(args: InspectBootArgs, format: OutputFormat) -> Result<i32> {
     let limits = Limits::default();
-    let is_uki = args.uki
-        || args
-            .path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.eq_ignore_ascii_case("efi") || e.eq_ignore_ascii_case("uki"))
-            .unwrap_or(false);
+    if let Err(error) = std::fs::metadata(&args.path) {
+        return Err(crate::error::input_io("inspect-boot", &args.path, &error));
+    }
+    let is_uki = match args.input_type {
+        BootInputType::Uki => true,
+        BootInputType::Initrd => false,
+        BootInputType::Auto => {
+            let bytes = std::fs::read(&args.path)
+                .map_err(|e| crate::error::input_io("inspect-boot", &args.path, &e))?;
+            looks_like_uki(&bytes)
+        }
+    };
 
     let json = if is_uki {
         let insp = inspect_uki(&args.path, &limits).map_err(|e| miette::miette!("{e}"))?;
         BootJson {
+            schema_version: 1,
+            command: "inspect-boot",
             kind: "uki".into(),
             path: insp.path.clone(),
             file_size: insp.file_size,
@@ -46,6 +55,8 @@ pub fn run(args: InspectBootArgs, format: OutputFormat) -> Result<i32> {
     } else {
         let insp = inspect_initrd(&args.path, &limits).map_err(|e| miette::miette!("{e}"))?;
         BootJson {
+            schema_version: 1,
+            command: "inspect-boot",
             kind: "initrd".into(),
             path: insp.path.clone(),
             file_size: insp.file_size,

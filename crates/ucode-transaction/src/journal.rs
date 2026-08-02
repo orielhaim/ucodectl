@@ -12,6 +12,7 @@ use crate::{Result, TransactionError};
 pub enum JournalEntry {
     Begin {
         id: String,
+        plan_id: String,
         started_unix: u64,
     },
     Wrote {

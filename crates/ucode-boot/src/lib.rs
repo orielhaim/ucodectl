@@ -14,7 +14,7 @@ pub mod uki;
 
 pub use early::{EarlyBuildInput, EarlyBuildResult, build_early_cpio};
 pub use initrd::{EmbeddedBlob, InitrdInspection, extract_embedded_microcode, inspect_initrd};
-pub use uki::{UkiInspection, UkiSectionInfo, inspect_uki};
+pub use uki::{UkiInspection, UkiSectionInfo, inspect_uki, looks_like_uki};
 
 use std::path::PathBuf;
 use thiserror::Error;
